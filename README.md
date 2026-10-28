@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Thông tin học phần
 Học phần: Hệ điều hành
 Khoa: Công nghệ Thông tin — Trường Đại học Sư phạm TP. Hồ Chí Minh
