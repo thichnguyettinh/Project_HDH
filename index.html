@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nhận diện hành vi trong video</title>
+  <link rel="icon" href="logo/fit210.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="header">
+  <button class="header-menu" id="btnMenu" type="button" aria-label="Menu">
+    <i class="fa-solid fa-bars"></i>
+  </button>
+  <div class="header-brand">
+    <img class="header-logo" src="logo/fit210.png" alt="Khoa CNTT">
+    <div class="header-title">Nhận diện hành vi trong video</div>
+  </div>
+  <div class="header-right">
+    <div class="header-sys-status" id="headerSysStatus" data-tooltip="Nhấp để xem chi tiết Giám sát hệ thống & Xung đột">
+      <span class="sys-dot"></span>
+      <span id="headerSysText">CPU --% · RAM -- MB</span>
+    </div>
+    <div class="header-clock">
+      <div id="clockTime">--:--:--</div>
+      <div id="clockDate"></div>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <nav class="menu">
+      <a href="#video" class="menu-item active" data-page="video">
+        <i class="fa-solid fa-film"></i><span>Phân tích video</span>
+      </a>
+      <a href="#camera" class="menu-item" data-page="camera">
+        <i class="fa-solid fa-camera"></i><span>Camera realtime</span>
+      </a>
+      <a href="#monitor" class="menu-item" data-page="monitor">
+        <i class="fa-solid fa-microchip"></i><span>Giám sát hệ thống</span>
+      </a>
+      <a href="#chat" class="menu-item" data-page="chat">
+        <i class="fa-solid fa-comments"></i><span>Chatbot</span>
+      </a>
+      <a href="#settings" class="menu-item" data-page="settings">
+        <i class="fa-solid fa-gear"></i><span>Cài đặt</span>
+      </a>
+    </nav>
+    <div class="sidebar-foot">Nhóm 01 - Hệ điều hành</div>
+  </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <main class="content">
+
+    <!-- Phân tích video -->
+    <section class="page active" id="page-video">
+      <div class="breadcrumb">Trang chủ <i class="fa-solid fa-angle-right"></i> <span>Phân tích video</span></div>
+      <h1 class="page-title">Phân tích video</h1>
+
+      <!-- Hàng 1: Video đầu vào & Thống kê biểu đồ cột NGANG NHAU (cân đối 2 bên) -->
+      <div class="row row-stretch">
+        <!-- Thẻ 1: Video đầu vào -->
+        <div class="col-6">
+          <div class="card card-video-input">
+            <div class="card-head">
+              <h2></i> Video đầu vào</h2>
+            </div>
+            <label class="dropzone" id="dropzone">
+              <input type="file" id="videoInput" accept="video/*" hidden>
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+              <div>Kéo thả video vào đây hoặc <b>chọn file</b></div>
+              <small>MP4, WebM, MOV, tối đa 15MB</small>
+            </label>
+            <video id="videoPreview" controls class="hidden"></video>
+            <div id="videoInfo" class="meta hidden">
+              <span>Tên file <b id="videoName"></b></span>
+              <span>Dung lượng <b id="videoSize"></b></span>
+              <span>Thời lượng <b id="videoDuration"></b></span>
+            </div>
+            <div class="actions">
+              <button id="btnAnalyze" class="btn btn-primary" type="button" disabled>
+                <i class="fa-solid fa-magnifying-glass"></i> Phân tích video
+              </button>
+              <span id="videoStatus" class="status"></span>
+            </div>
+            <p class="text-muted">Chọn video khác sẽ xoá kết quả phân tích hiện tại. Dùng Xuất JSON để lưu và Nhập JSON để mở lại mà không cần gọi AI.</p>
+          </div>
+        </div>
+
+        <!-- Thẻ 2: Thống kê tính chất hành vi (Biểu đồ cột ngang hàng với Video đầu vào) -->
+        <div class="col-6">
+          <div class="card card-video-chart">
+            <div class="card-head">
+              <h2></i> Thống kê tính chất hành vi</h2>
+              <div class="card-tools">
+                <input type="file" id="importInput" accept=".json,application/json" hidden>
+                <button id="btnImport" class="btn btn-outline btn-sm" type="button" data-tooltip="Nhập kết quả từ file JSON đã lưu">
+                  <i class="fa-solid fa-file-import"></i> Nhập JSON
+                </button>
+                <button id="btnDownload" class="btn btn-outline btn-sm" type="button" disabled data-tooltip="Lưu kết quả phân tích thành file JSON">
+                  <i class="fa-solid fa-file-export"></i> Xuất JSON
+                </button>
+              </div>
+            </div>
+
+            <!-- Tóm tắt video -->
+            <div id="summary" class="summary hidden"></div>
+
+            <!-- Biểu đồ cột thống kê tính chất hành vi -->
+            <div id="natureChartCard" class="nature-chart-card hidden">
+              <div class="nature-chart-header">
+                <div class="nature-chart-title">
+                  <i class="fa-solid fa-chart-simple"></i>
+                  <span>Tỉ lệ phân bố 4 nhóm hành vi</span>
+                </div>
+                <div id="natureSummaryBadges" class="nature-summary-badges"></div>
+              </div>
+              <div id="natureChartBars" class="nature-bars-grid"></div>
+            </div>
+
+            <!-- Placeholder hiển thị khi chưa có kết quả phân tích -->
+            <div id="natureChartEmpty" class="chart-empty-box">
+              <div class="empty-icon"><i class="fa-solid fa-chart-column"></i></div>
+              <div class="empty-text">Chưa có dữ liệu thống kê</div>
+              <p class="empty-sub">Hãy tải video lên và bấm <b>Phân tích video</b> hoặc <b>Nhập JSON</b> để xem biểu đồ phân bố 4 nhóm hành vi
+              </p><p class="empty-sub">(Nguy hiểm, Bất thường, An toàn, Bình thường).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hàng 2: Bảng chi tiết kết quả nhận diện hành vi (Nằm ở phía dưới, toàn chiều rộng dễ nhìn) -->
+      <div class="row">
+        <div class="col-12">
+          <div class="card card-video-table">
+            <div class="card-head">
+              <h2></i> Bảng chi tiết hành vi nhận diện</h2>
+            </div>
+
+            <div id="actionPills" class="pills"></div>
+
+            <div class="filter-bar">
+              <div class="search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input id="filterText" placeholder="Tìm theo trang phục, hành vi, ví dụ: áo đỏ, điện thoại...">
+              </div>
+              <div class="filter-select-wrap">
+                <select id="filterNature" class="filter-select" data-tooltip="Lọc danh sách theo tính chất hành vi">
+                  <option value="">Tất cả tính chất</option>
+                  <option value="Nguy hiểm">Nguy hiểm</option>
+                  <option value="Bất thường">Bất thường</option>
+                  <option value="An toàn">An toàn</option>
+                  <option value="Bình thường">Bình thường</option>
+                </select>
+              </div>
+              <button id="btnClearFilter" class="btn btn-outline" type="button" data-tooltip="Đặt lại toàn bộ tìm kiếm & bộ lọc">
+                <i class="fa-solid fa-rotate-left"></i> Đặt lại
+              </button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th class="w-stt" data-tooltip="Số thứ tự">STT</th>
+                    <th class="w-person" data-tooltip="Mã định danh người trong video">Người</th>
+                    <th data-tooltip="Đặc điểm nhận diện, trang phục">Đặc điểm</th>
+                    <th data-tooltip="Hành vi được nhận diện">Hành vi</th>
+                    <th class="w-nature" data-tooltip="Tính chất mức độ an toàn của hành vi">Tính chất</th>
+                    <th class="w-time" data-tooltip="Khung thời gian diễn ra hành vi (bấm để tua video)">Thời điểm</th>
+                    <th data-tooltip="Mô tả chi tiết bổ sung">Chi tiết</th>
+                  </tr>
+                </thead>
+                <tbody id="resultBody">
+                  <tr class="empty"><td colspan="7"><i class="fa-regular fa-folder-open"></i>Không có dữ liệu</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-foot">
+              <span id="filterCount">Đang hiển thị 0 kết quả</span>
+              <span class="text-muted">Bấm vào biểu tượng thời gian hoặc dòng để tua video đến thời điểm đó</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Camera realtime -->
+    <section class="page" id="page-camera">
+      <div class="breadcrumb">Trang chủ <i class="fa-solid fa-angle-right"></i> <span>Camera realtime</span></div>
+      <h1 class="page-title">Camera realtime</h1>
+
+      <div class="row">
+        <div class="col-5">
+          <div class="card">
+            <div class="card-head">
+              <h2>Camera</h2>
+              <span id="camBadge" class="badge-live hidden"><i class="fa-solid fa-circle"></i> LIVE</span>
+            </div>
+            <video id="camVideo" autoplay muted playsinline></video>
+            <canvas id="camCanvas" hidden></canvas>
+            <div class="actions">
+              <button id="btnCamStart" class="btn btn-primary" type="button" data-tooltip="Bật camera máy tính để nhận diện trực tiếp">
+                <i class="fa-solid fa-play"></i> Bật camera
+              </button>
+              <button id="btnCamStop" class="btn btn-outline" type="button" disabled data-tooltip="Dừng camera">
+                <i class="fa-solid fa-stop"></i> Dừng
+              </button>
+              <label class="inline-field" data-tooltip="Tần suất AI chụp và phân tích khung hình">
+                Chụp mỗi
+                <select id="camInterval">
+                  <option value="2000">2 giây</option>
+                  <option value="3000" selected>3 giây</option>
+                  <option value="5000">5 giây</option>
+                </select>
+              </label>
+            </div>
+            <div id="camStatus" class="status"></div>
+            <p class="text-muted">Cứ vài giây một khung hình được gửi lên AI để nhận diện người và hành vi.</p>
+          </div>
+
+        </div>
+
+        <div class="col-7">
+          <div class="card">
+            <div class="card-head">
+              <h2>Nhận diện mới nhất</h2>
+              <span id="camLatestTime" class="text-muted"></span>
+            </div>
+            <div id="camLatest" class="latest">
+              <div class="text-muted">Chưa có dữ liệu</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2>Nhật ký</h2>
+              <div class="card-tools">
+                <button id="btnCamClear" class="btn btn-outline btn-sm" type="button" data-tooltip="Xoá toàn bộ lịch sử camera">
+                  <i class="fa-solid fa-trash-can"></i> Xoá nhật ký
+                </button>
+              </div>
+            </div>
+            <div class="filter-bar">
+              <div class="search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input id="camFilter" placeholder="Tìm theo trang phục, hành vi">
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th class="w-time" data-tooltip="Thời gian AI ghi nhận">Thời gian</th>
+                    <th class="w-thumb-col" data-tooltip="Hình ảnh khung hình camera lúc phát hiện">Ảnh chụp</th>
+                    <th data-tooltip="Đặc điểm người phát hiện">Người</th>
+                    <th data-tooltip="Hành vi đang thực hiện">Hành vi</th>
+                  </tr>
+                </thead>
+                <tbody id="camLogBody">
+                  <tr class="empty"><td colspan="4"><i class="fa-regular fa-folder-open"></i>Không có dữ liệu</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Giám sát hệ thống & Kiểm tra xung đột -->
+    <section class="page" id="page-monitor">
+      <div class="breadcrumb">Trang chủ <i class="fa-solid fa-angle-right"></i> <span>Giám sát hệ thống</span></div>
+      <div class="page-title-row">
+        <h1 class="page-title">Giám sát hệ thống & Kiểm tra xung đột</h1>
+        <div class="page-title-actions">
+          <button id="btnScanConflictMain" class="btn btn-primary btn-sm" type="button" data-tooltip="Quét toàn bộ phần cứng và ứng dụng nền">
+            <i class="fa-solid fa-arrows-rotate"></i> Quét xung đột ngay
+          </button>
+        </div>
+      </div>
+
+      <!-- Hàng 3 thẻ đo: CPU, GPU, RAM -->
+      <div class="row-metrics">
+        <!-- Thẻ CPU -->
+        <div class="card card-monitor-stat">
+          <div class="card-head">
+            <h2><i class="fa-solid fa-microchip"></i> CPU (Vi xử lý)</h2>
+            <span class="badge-tag" id="cpuCoresTag">-- Luồng</span>
+          </div>
+          <div class="gauge-display">
+            <div class="gauge-circle" id="cpuGaugeCircle">
+              <div class="gauge-inner">
+                <div class="gauge-val" id="cpuPercentVal">--%</div>
+                <div class="gauge-sub">Tải ước tính</div>
+              </div>
+            </div>
+          </div>
+          <div class="metric-progress-bar">
+            <div class="metric-progress-fill" id="cpuBarFill" style="width: 0%"></div>
+          </div>
+          <div class="metric-details-list">
+            <div class="metric-detail-row">
+              <span>Độ trễ Main Thread:</span>
+              <b id="cpuLagVal">-- ms</b>
+            </div>
+            <div class="metric-detail-row">
+              <span>Khung hình render:</span>
+              <b id="cpuFpsVal">-- FPS</b>
+            </div>
+            <div class="metric-detail-row">
+              <span>Trạng thái luồng:</span>
+              <b id="cpuStatusText" class="text-success">Mượt mà</b>
+            </div>
+          </div>
+        </div>
+
+        <!-- Thẻ GPU / Bộ xử lý đồ họa (Góc nhìn Hệ điều hành) -->
+        <div class="card card-monitor-stat card-monitor-gpu">
+          <div class="card-head">
+            <h2><i class="fa-solid fa-tv"></i> Thiết bị GPU</h2>
+            <span class="badge-tag" id="gpuAccelBadge">Driver</span>
+          </div>
+          <div class="gauge-display">
+            <div class="gauge-circle gpu-circle" id="gpuGaugeCircle">
+              <div class="gauge-inner">
+                <div class="gauge-val" id="gpuScoreVal">--%</div>
+                <div class="gauge-sub" id="gpuScoreSub">Tải GPU ước tính</div>
+              </div>
+            </div>
+          </div>
+          <div class="metric-progress-bar">
+            <div class="metric-progress-fill success" id="gpuBarFill" style="width: 0%"></div>
+          </div>
+          <div class="metric-details-list">
+            <div class="metric-detail-row">
+              <span>Thiết bị phần cứng:</span>
+              <b id="gpuRendererName" class="val-ellipsis" title="Đang phát hiện...">Đang tải...</b>
+            </div>
+            <div class="metric-detail-row">
+              <span>Trình điều khiển (Driver):</span>
+              <b id="gpuAccelText" class="text-success">Điều phối tốt</b>
+            </div>
+            <div class="metric-detail-row">
+              <span>Tranh chấp tài nguyên:</span>
+              <b id="gpuStatusText" class="text-success">Không xung đột</b>
+            </div>
+          </div>
+          <span id="gpuVendorName" style="display:none"></span>
+          <span id="gpuContextText" style="display:none"></span>
+        </div>
+
+        <!-- Thẻ RAM -->
+        <div class="card card-monitor-stat">
+          <div class="card-head">
+            <h2><i class="fa-solid fa-memory"></i> Bộ nhớ RAM</h2>
+            <span class="badge-tag" id="deviceRamTag">-- GB RAM</span>
+          </div>
+          <div class="gauge-display">
+            <div class="gauge-circle ram-circle" id="ramGaugeCircle">
+              <div class="gauge-inner">
+                <div class="gauge-val" id="ramPercentVal">--%</div>
+                <div class="gauge-sub">Chiếm dụng Heap</div>
+              </div>
+            </div>
+          </div>
+          <div class="metric-progress-bar">
+            <div class="metric-progress-fill" id="ramBarFill" style="width: 0%"></div>
+          </div>
+          <div class="metric-details-list">
+            <div class="metric-detail-row">
+              <span>RAM sử dụng (Heap):</span>
+              <b id="ramUsedVal">-- MB</b>
+            </div>
+            <div class="metric-detail-row">
+              <span>Hạn mức bộ nhớ tab:</span>
+              <b id="ramLimitVal">-- MB</b>
+            </div>
+            <div class="metric-detail-row">
+              <span>Áp lực bộ nhớ:</span>
+              <b id="ramStatusText" class="text-success">Bình thường</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Thẻ Kiểm tra Xung đột hệ thống -->
+      <div class="card card-conflict-check">
+        <div class="card-head">
+          <h2></i> Bảng kiểm tra xung đột với các phần mềm đang chạy trên máy</h2>
+          <div class="card-tools">
+            <span id="conflictScanTime" class="text-muted text-xs">Vừa quét</span>
+          </div>
+        </div>
+
+        <!-- Banner tổng quan -->
+        <div id="conflictMainBanner" class="conflict-banner ok">
+          <div class="conflict-banner-icon"><i class="fa-solid fa-circle-check"></i></div>
+          <div class="conflict-banner-content">
+            <div class="conflict-banner-title" id="conflictBannerTitle">Hệ thống đang hoạt động tối ưu — Không phát hiện xung đột</div>
+            <div class="conflict-banner-desc" id="conflictBannerDesc">Camera, GPU, CPU, RAM và kết nối API đều sẵn sàng xử lý video và nhận diện thời gian thực.</div>
+          </div>
+        </div>
+
+        <!-- Danh sách 5 module kiểm tra dạng lưới 2 cột cân đối -->
+        <div class="conflict-grid">
+          <!-- Item 1: Camera -->
+          <div class="conflict-item" id="chkCameraItem">
+            <div class="conflict-item-icon"><i class="fa-solid fa-video"></i></div>
+            <div class="conflict-item-body">
+              <div class="conflict-item-head">
+                <span class="conflict-item-title">Xung đột Camera &amp; Thiết bị quay</span>
+                <span class="conflict-status-badge ok" id="chkCameraBadge"><i class="fa-solid fa-check"></i> Sẵn sàng</span>
+              </div>
+              <div class="conflict-item-text" id="chkCameraDesc">Không phát hiện ứng dụng nào (Zoom, Teams, OBS, Zalo, Camera Windows...) khóa độc quyền webcam.</div>
+            </div>
+          </div>
+
+          <!-- Item 2: GPU -->
+          <div class="conflict-item" id="chkGpuItem">
+            <div class="conflict-item-icon"><i class="fa-solid fa-tv"></i></div>
+            <div class="conflict-item-body">
+              <div class="conflict-item-head">
+                <span class="conflict-item-title">Xung đột Driver GPU &amp; Thiết bị</span>
+                <span class="conflict-status-badge ok" id="chkGpuBadge"><i class="fa-solid fa-check"></i> Driver sẵn sàng</span>
+              </div>
+              <div class="conflict-item-text" id="chkGpuDesc">Trình điều khiển thiết bị (WDDM/HAL) hoạt động trực tiếp qua phần cứng, không bị tranh chấp tài nguyên với tiến trình khác của hệ điều hành.</div>
+            </div>
+          </div>
+
+          <!-- Item 3: CPU -->
+          <div class="conflict-item" id="chkCpuItem">
+            <div class="conflict-item-icon"><i class="fa-solid fa-microchip"></i></div>
+            <div class="conflict-item-body">
+              <div class="conflict-item-head">
+                <span class="conflict-item-title">Xung đột Luồng CPU &amp; Ứng dụng nền</span>
+                <span class="conflict-status-badge ok" id="chkCpuBadge"><i class="fa-solid fa-check"></i> Phản hồi nhanh</span>
+              </div>
+              <div class="conflict-item-text" id="chkCpuDesc">Độ trễ luồng xử lý rất thấp, không có tiến trình chạy ngầm nào làm nghẽn tiến trình AI.</div>
+            </div>
+          </div>
+
+          <!-- Item 4: RAM -->
+          <div class="conflict-item" id="chkRamItem">
+            <div class="conflict-item-icon"><i class="fa-solid fa-memory"></i></div>
+            <div class="conflict-item-body">
+              <div class="conflict-item-head">
+                <span class="conflict-item-title">Xung đột Bộ nhớ RAM &amp; Áp lực tràn bộ nhớ</span>
+                <span class="conflict-status-badge ok" id="chkRamBadge"><i class="fa-solid fa-check"></i> Bộ nhớ an toàn</span>
+              </div>
+              <div class="conflict-item-text" id="chkRamDesc">Mức chiếm dụng JavaScript Heap ở mức an toàn, bộ nhớ đủ để tải và phân tích video độ phân giải cao.</div>
+            </div>
+          </div>
+
+          <!-- Item 5: API & Mạng (Toàn chiều rộng) -->
+          <div class="conflict-item conflict-item-full" id="chkNetItem">
+            <div class="conflict-item-icon"><i class="fa-solid fa-network-wired"></i></div>
+            <div class="conflict-item-body">
+              <div class="conflict-item-head">
+                <span class="conflict-item-title">Xung đột Mạng &amp; Tường lửa với Gemini API</span>
+                <span class="conflict-status-badge ok" id="chkNetBadge"><i class="fa-solid fa-check"></i> Thông suốt</span>
+              </div>
+              <div class="conflict-item-text" id="chkNetDesc">Đường truyền tới máy chủ Google AI hoạt động bình thường, không bị chặn bởi Tường lửa, VPN hoặc Antivirus.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Khuyến nghị khi có xung đột -->
+        <div id="conflictTipsBox" class="conflict-tips-box">
+          <div class="tips-title"><i class="fa-solid fa-lightbulb"></i> Lời khuyên tối ưu hiệu năng và tránh xung đột:</div>
+          <ul class="tips-list" id="conflictTipsList">
+            <li>Nếu bật camera báo lỗi, kiểm tra xem Zoom, Google Meet, OBS Studio hoặc Zalo có đang mở camera hay không.</li>
+            <li>Đảm bảo trình duyệt đã bật <b>"Use graphics acceleration when available"</b> trong phần Cài đặt nâng cao của trình duyệt.</li>
+            <li>Khi phân tích video dài, đóng bớt các tab không sử dụng để giải phóng bộ nhớ RAM cho AI xử lý mượt hơn.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chatbot -->
+    <section class="page" id="page-chat">
+      <div class="breadcrumb">Trang chủ <i class="fa-solid fa-angle-right"></i> <span>Chatbot</span></div>
+      <h1 class="page-title">Chatbot</h1>
+
+      <div class="row">
+        <div class="col-8">
+          <div class="card chat-card">
+            <div class="card-head">
+              <h2>Hỏi đáp về video</h2>
+              <div class="card-tools">
+                <button id="btnChatClear" class="btn btn-outline btn-sm" type="button" data-tooltip="Xoá toàn bộ tin nhắn trò chuyện">
+                  <i class="fa-solid fa-trash-can"></i> Xoá hội thoại
+                </button>
+              </div>
+            </div>
+            <div id="chatMessages" class="chat-messages">
+              <div class="chat-empty">
+                <i class="fa-regular fa-comments"></i>
+                <div>Phân tích video hoặc bật camera trước, sau đó đặt câu hỏi về những gì AI đã nhận diện.</div>
+              </div>
+            </div>
+            <div class="chat-suggestions">
+              <span class="chat-suggestions-label"><i class="fa-regular fa-lightbulb"></i> Gợi ý câu hỏi</span>
+              <div class="suggest-list" id="chatSuggest">
+                <button type="button">Có hành vi nào nguy hiểm hoặc bất thường không?<i class="fa-solid fa-angle-right"></i></button>
+                <button type="button">Có bao nhiêu người trong video?<i class="fa-solid fa-angle-right"></i></button>
+                <button type="button">Người mặc áo đỏ đang làm gì?<i class="fa-solid fa-angle-right"></i></button>
+                <button type="button">Ai đang dùng điện thoại?<i class="fa-solid fa-angle-right"></i></button>
+                <button type="button">Tóm tắt các hành vi theo thời gian<i class="fa-solid fa-angle-right"></i></button>
+              </div>
+            </div>
+            <form id="chatForm" class="chat-form">
+              <input id="chatInput" placeholder="Nhập câu hỏi" autocomplete="off">
+              <button class="btn btn-primary" type="submit" data-tooltip="Gửi câu hỏi tới AI">
+                <i class="fa-solid fa-paper-plane"></i> Gửi
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div class="col-4">
+          <div class="card">
+            <div class="card-head">
+              <h2>Chọn nguồn dữ liệu</h2>
+            </div>
+            <div class="pills" id="chatSource">
+              <button class="pill" data-source="both" type="button">Video và camera</button>
+              <button class="pill" data-source="video" type="button">Chỉ video</button>
+              <button class="pill" data-source="camera" type="button">Chỉ camera</button>
+            </div>
+            <dl class="info-list">
+              <dt data-group="video">Video</dt><dd data-group="video" id="ctxVideo">Chưa có</dd>
+              <dt data-group="video">Số người</dt><dd data-group="video" id="ctxPersons">0</dd>
+              <dt data-group="video">Số hành vi</dt><dd data-group="video" id="ctxEvents">0</dd>
+              <dt data-group="camera">Nhật ký camera</dt><dd data-group="camera" id="ctxCamera">0 mục</dd>
+            </dl>
+            <p class="text-muted">Chatbot phản hồi tự động dựa trên AI và có thể mắc sai sót.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cài đặt -->
+    <section class="page" id="page-settings">
+      <div class="breadcrumb">Trang chủ <i class="fa-solid fa-angle-right"></i> <span>Cài đặt</span></div>
+      <h1 class="page-title">Cài đặt</h1>
+
+      <div class="row row-stretch">
+        <div class="col-7">
+          <div class="card">
+            <div class="card-head">
+              <h2>Kết nối Gemini API</h2>
+            </div>
+
+            <div class="form-row">
+              <label for="apiKey">API key <span class="req">*</span></label>
+              <div class="form-field">
+                <div class="input-group">
+                  <input type="text" id="apiKey" placeholder="Dán API key" autocomplete="off" spellcheck="false">
+                  <button id="btnToggleKey" class="btn-icon" type="button" title="Hiện / ẩn">
+                    <i class="fa-regular fa-eye"></i>
+                  </button>
+                </div>
+                <small>Key chỉ lưu trong trình duyệt này, không nằm trong mã nguồn.</small>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label for="model">Model</label>
+              <div class="form-field">
+                <div class="input-group">
+                  <select id="model"></select>
+                  <button id="btnLoadModels" class="btn btn-outline" type="button">
+                    <i class="fa-solid fa-list"></i> Tải danh sách
+                  </button>
+                </div>
+                <small>Nên dùng model Flash hoặc Flash-Lite, thuộc gói miễn phí.</small>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label></label>
+              <div class="form-field actions">
+                <button id="btnSaveSettings" class="btn btn-primary" type="button">
+                  <i class="fa-solid fa-floppy-disk"></i> Lưu lại
+                </button>
+                <span id="settingsStatus" class="status"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-5">
+          <div class="card">
+            <div class="card-head">
+              <h2>Cách lấy API key</h2>
+            </div>
+            <ol class="steps">
+              <li><span>Vào <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> và đăng nhập tài khoản Google.</span></li>
+              <li><span>Bấm <b>Create API key</b>, sao chép chuỗi key vừa tạo.</span></li>
+              <li><span>Dán vào ô API key bên trái, bấm <b>Lưu lại</b>.</span></li>
+              <li><span>Bấm <b>Tải danh sách</b> để kiểm tra key và chọn model.</span></li>
+            </ol>
+            <p class="text-muted">Gói miễn phí không cần thẻ thanh toán, có giới hạn số lượt gọi mỗi phút và mỗi ngày. Nếu thấy thông báo "Vượt hạn mức miễn phí" thì đợi một lúc hoặc chuyển sang model Flash-Lite.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Modal xem ảnh chụp phóng to cho Camera Realtime -->
+<div id="imageModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalImgTitle">
+  <div class="modal-container">
+    <div class="modal-head">
+      <div class="modal-title">
+        <i class="fa-solid fa-camera"></i> <span id="modalImgTitle">Ảnh chụp camera</span>
+      </div>
+      <button id="modalClose" class="modal-close" type="button" aria-label="Đóng" data-tooltip="Đóng (Esc)">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-img-wrap">
+        <img id="modalImg" src="" alt="Ảnh chụp camera lớn">
+      </div>
+      <div id="modalImgDesc" class="modal-desc"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Floating Tooltip Container -->
+<div id="appTooltip" class="app-tooltip"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
