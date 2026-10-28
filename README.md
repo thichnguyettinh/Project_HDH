@@ -6,12 +6,7 @@ Giảng viên hướng dẫn: ThS. Nguyễn Phương Nam
 
 ## Nhận diện hành vi trong video
 
-Đồ án môn Hệ điều hành. Trang web phân tích video ngắn và camera realtime: nhận diện từng người xuất hiện, liệt kê hành vi theo thời gian, lọc theo hành vi và chatbot hỏi đáp về nội dung video.
-=======
-# Nhận diện hành vi trong video
-Đồ án môn Hệ điều hành.
 Trang web phân tích video ngắn và camera realtime: nhận diện từng người xuất hiện, liệt kê hành vi theo thời gian, lọc theo hành vi và chatbot hỏi đáp về nội dung video.
->>>>>>> 1df1a53b26bd9d6b10c1b60b6eb9212a4fa92504
 
 Toàn bộ chạy trên trình duyệt bằng HTML, CSS, JavaScript thuần. Phần AI gọi Google Gemini API (gói miễn phí).
 
