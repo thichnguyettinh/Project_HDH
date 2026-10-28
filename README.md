@@ -1,8 +1,8 @@
 # Thông tin học phần
-Học phần: Hệ điều hành
-Khoa: Công nghệ Thông tin — Trường Đại học Sư phạm TP. Hồ Chí Minh
-Mã lớp: 2611COMP133202
-Giảng viên hướng dẫn: ThS. Nguyễn Phương Nam
+- Học phần: Hệ điều hành
+- Khoa: Công nghệ Thông tin — Trường Đại học Sư phạm TP. Hồ Chí Minh
+- Mã lớp: 2611COMP133202
+- Giảng viên hướng dẫn: ThS. Nguyễn Phương Nam
 
 ## Nhận diện hành vi trong video
 
