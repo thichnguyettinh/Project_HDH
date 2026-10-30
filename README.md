@@ -1,14 +1,14 @@
-# Thông tin học phần
-- Học phần: Hệ điều hành
-- Khoa: Công nghệ Thông tin — Trường Đại học Sư phạm TP. Hồ Chí Minh
-- Mã lớp: 2611COMP133202
-- Giảng viên hướng dẫn: ThS. Nguyễn Phương Nam
-
-## Nhận diện hành vi trong video
+# Nhận diện hành vi trong video
 
 Trang web phân tích video ngắn và camera realtime: nhận diện từng người xuất hiện, liệt kê hành vi theo thời gian, lọc theo hành vi và chatbot hỏi đáp về nội dung video.
 
 Toàn bộ chạy trên trình duyệt bằng HTML, CSS, JavaScript thuần. Phần AI gọi Google Gemini API (gói miễn phí).
+
+## Thông tin học phần
+- Học phần: Hệ điều hành
+- Khoa: Công nghệ Thông tin — Trường Đại học Sư phạm TP. Hồ Chí Minh
+- Mã lớp: 2611COMP133202
+- Giảng viên hướng dẫn: ThS. Nguyễn Phương Nam
 
 ## Tính năng
 
