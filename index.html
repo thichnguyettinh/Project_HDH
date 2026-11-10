@@ -35,12 +35,15 @@
 <div class="layout">
   <aside class="sidebar" id="sidebar">
     <nav class="menu">
+      <div class="menu-section-label">Chức năng chính</div>
       <a href="#video" class="menu-item active" data-page="video">
         <i class="fa-solid fa-film"></i><span>Phân tích video</span>
       </a>
       <a href="#camera" class="menu-item" data-page="camera">
         <i class="fa-solid fa-camera"></i><span>Camera realtime</span>
       </a>
+
+      <div class="menu-section-label">Hệ thống &amp; Tiện ích</div>
       <a href="#monitor" class="menu-item" data-page="monitor">
         <i class="fa-solid fa-microchip"></i><span>Giám sát hệ thống</span>
       </a>
@@ -51,7 +54,17 @@
         <i class="fa-solid fa-gear"></i><span>Cài đặt</span>
       </a>
     </nav>
-    <div class="sidebar-foot">Nhóm 01 - Hệ điều hành</div>
+    <div class="sidebar-sys-card">
+      <div class="sidebar-sys-head">
+        <span class="sys-dot"></span>
+        <span>Hệ điều hành</span>
+      </div>
+      <div class="sidebar-sys-info" id="sidebarSysSummary">Hoạt động tối ưu</div>
+    </div>
+    <div class="sidebar-foot">
+      <div class="foot-title"><i class="fa-solid fa-graduation-cap"></i> Nhóm 01 - Hệ điều hành</div>
+      <div class="foot-sub">ĐH Sư phạm TP.HCM (HCMUE)</div>
+    </div>
   </aside>
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
@@ -68,13 +81,14 @@
         <div class="col-6">
           <div class="card card-video-input">
             <div class="card-head">
-              <h2></i> Video đầu vào</h2>
+              <h2>Video đầu vào</h2>
+              <span class="badge-tag" data-tooltip="Hỗ trợ tốt nhất định dạng MP4 và WebM">Khuyên dùng: MP4, WebM</span>
             </div>
             <label class="dropzone" id="dropzone">
-              <input type="file" id="videoInput" accept="video/*" hidden>
+              <input type="file" id="videoInput" accept="video/mp4,video/webm,video/quicktime,video/*" hidden multiple>
               <i class="fa-solid fa-cloud-arrow-up"></i>
-              <div>Kéo thả video vào đây hoặc <b>chọn file</b></div>
-              <small>MP4, WebM, MOV, tối đa 15MB</small>
+              <div>Kéo thả video vào đây hoặc <b style="color:var(--primary); text-decoration:underline;">chọn video từ máy tính</b></div>
+              Vui lòng tải video có định dạng <b>.MP4, .WebM</b> Tối đa 15MB/video (tối đa 5 video)</small>
             </label>
             <video id="videoPreview" controls class="hidden"></video>
             <div id="videoInfo" class="meta hidden">
@@ -82,13 +96,23 @@
               <span>Dung lượng <b id="videoSize"></b></span>
               <span>Thời lượng <b id="videoDuration"></b></span>
             </div>
+
+            <!-- Bảng hàng đợi điều phối video (Process Queue & SJF Scheduling) -->
+            <div id="videoQueueCard" class="video-queue-wrap hidden">
+              <div class="queue-head">
+                <span><i class="fa-solid fa-list-check"></i> Danh sách chờ phân tích (Tự động ưu tiên video nhẹ)</span>
+                <span id="queueCountTag" class="text-xs text-muted">0 file</span>
+              </div>
+              <div id="videoQueueList" class="video-queue-list"></div>
+            </div>
+
             <div class="actions">
-              <button id="btnAnalyze" class="btn btn-primary" type="button" disabled>
-                <i class="fa-solid fa-magnifying-glass"></i> Phân tích video
+              <button id="btnAnalyze" class="btn btn-primary" type="button" disabled data-tooltip="Bắt đầu gửi video cho AI nhận diện hành vi">
+              Bắt đầu phân tích video
               </button>
               <span id="videoStatus" class="status"></span>
             </div>
-            <p class="text-muted">Chọn video khác sẽ xoá kết quả phân tích hiện tại. Dùng Xuất JSON để lưu và Nhập JSON để mở lại mà không cần gọi AI.</p>
+            <p class="text-muted"><i class="fa-solid fa-lightbulb"></i>  Video có dung lượng nhỏ hơn sẽ được ưu tiên gửi đi phân tích trước, giúp bạn tiết kiệm thời gian chờ.</p>
           </div>
         </div>
 
@@ -96,7 +120,7 @@
         <div class="col-6">
           <div class="card card-video-chart">
             <div class="card-head">
-              <h2></i> Thống kê tính chất hành vi</h2>
+              <h2><i class="fa-solid fa-chart-column"></i> Thống kê tính chất hành vi</h2>
               <div class="card-tools">
                 <input type="file" id="importInput" accept=".json,application/json" hidden>
                 <button id="btnImport" class="btn btn-outline btn-sm" type="button" data-tooltip="Nhập kết quả từ file JSON đã lưu">
@@ -125,10 +149,15 @@
 
             <!-- Placeholder hiển thị khi chưa có kết quả phân tích -->
             <div id="natureChartEmpty" class="chart-empty-box">
-              <div class="empty-icon"><i class="fa-solid fa-chart-column"></i></div>
+              <div class="empty-icon"><i class="fa-solid fa-chart-simple"></i></div>
               <div class="empty-text">Chưa có dữ liệu thống kê</div>
-              <p class="empty-sub">Hãy tải video lên và bấm <b>Phân tích video</b> hoặc <b>Nhập JSON</b> để xem biểu đồ phân bố 4 nhóm hành vi
-              </p><p class="empty-sub">(Nguy hiểm, Bất thường, An toàn, Bình thường).</p>
+              <p class="empty-sub">Hãy tải video lên và bấm <b>Bắt đầu phân tích video</b> hoặc <b>Nhập JSON</b> để xem biểu đồ thống kê 4 nhóm hành vi:</p>
+              <div class="empty-badges-preview">
+                <span class="mini-tag danger"><i class="fa-solid fa-shield-virus"></i> Nguy hiểm</span>
+                <span class="mini-tag warn"><i class="fa-solid fa-triangle-exclamation"></i> Bất thường</span>
+                <span class="mini-tag success"><i class="fa-solid fa-shield-check"></i> An toàn</span>
+                <span class="mini-tag normal"><i class="fa-solid fa-circle-check"></i> Bình thường</span>
+              </div>
             </div>
           </div>
         </div>
@@ -139,7 +168,7 @@
         <div class="col-12">
           <div class="card card-video-table">
             <div class="card-head">
-              <h2></i> Bảng chi tiết hành vi nhận diện</h2>
+              <h2> Bảng chi tiết hành vi nhận diện</h2>
             </div>
 
             <div id="actionPills" class="pills"></div>
@@ -147,10 +176,10 @@
             <div class="filter-bar">
               <div class="search">
                 <i class="fa-solid fa-magnifying-glass"></i>
-                <input id="filterText" placeholder="Tìm theo trang phục, hành vi, ví dụ: áo đỏ, điện thoại...">
+                <input id="filterText" placeholder="Tìm theo người, trang phục hoặc hành vi (ví dụ: áo đen, đứng ở cửa, nói chuyện...)">
               </div>
               <div class="filter-select-wrap">
-                <select id="filterNature" class="filter-select" data-tooltip="Lọc danh sách theo tính chất hành vi">
+                <select id="filterNature" class="filter-select" data-tooltip="Lọc danh sách theo tính chất mức độ">
                   <option value="">Tất cả tính chất</option>
                   <option value="Nguy hiểm">Nguy hiểm</option>
                   <option value="Bất thường">Bất thường</option>
@@ -168,22 +197,22 @@
                 <thead>
                   <tr>
                     <th class="w-stt" data-tooltip="Số thứ tự">STT</th>
-                    <th class="w-person" data-tooltip="Mã định danh người trong video">Người</th>
+                    <th class="w-person" data-tooltip="Người xuất hiện trong video">Người</th>
                     <th data-tooltip="Đặc điểm nhận diện, trang phục">Đặc điểm</th>
-                    <th data-tooltip="Hành vi được nhận diện">Hành động</th>
-                    <th class="w-nature" data-tooltip="Tính chất mức độ an toàn của hành vi">Hành vi</th>
-                    <th class="w-time" data-tooltip="Khung thời gian diễn ra hành vi (bấm để tua video)">Thời điểm</th>
+                    <th data-tooltip="Hành vi cụ thể được nhận diện">Hành vi</th>
+                    <th class="w-nature" data-tooltip="Tính chất mức độ: Bình thường, An toàn, Bất thường hoặc Nguy hiểm">Tính chất</th>
+                    <th class="w-time" data-tooltip="Khung thời gian diễn ra trong video (bấm để xem ngay)">Thời điểm</th>
                     <th data-tooltip="Mô tả chi tiết bổ sung">Chi tiết</th>
                   </tr>
                 </thead>
                 <tbody id="resultBody">
-                  <tr class="empty"><td colspan="7"><i class="fa-regular fa-folder-open"></i>Không có dữ liệu</td></tr>
+                  <tr class="empty"><td colspan="7"><i class="fa-regular fa-folder-open"></i>Chưa có dữ liệu phân tích. Hãy tải video lên để bắt đầu!</td></tr>
                 </tbody>
               </table>
             </div>
             <div class="table-foot">
               <span id="filterCount">Đang hiển thị 0 kết quả</span>
-              <span class="text-muted">Bấm vào biểu tượng thời gian hoặc dòng để tua video đến thời điểm đó</span>
+              <span class="text-muted"><i class="fa-solid fa-circle-play"></i> Bấm vào dòng bất kỳ hoặc mốc thời gian để xem ngay đoạn video tương ứng</span>
             </div>
           </div>
         </div>
@@ -222,6 +251,40 @@
             </div>
             <div id="camStatus" class="status"></div>
             <p class="text-muted">Cứ vài giây một khung hình được gửi lên AI để nhận diện người và hành vi.</p>
+          </div>
+
+          <!-- Thẻ Mini Monitor trong trang Camera -->
+          <div class="card card-mini-monitor" id="camMiniMonitorCard">
+            <div class="card-head">
+              <h2><i class="fa-solid fa-gauge-high"></i> Tải phần cứng khi quay</h2>
+              <span id="camConflictBadge" class="badge-status-ok"><i class="fa-solid fa-check"></i> Sẵn sàng</span>
+            </div>
+            <div class="mini-metrics-grid">
+              <div class="mini-metric-item">
+                <div class="mini-metric-label">CPU</div>
+                <div class="mini-metric-val" id="camCpuVal">--%</div>
+                <div class="mini-metric-bar"><div class="mini-bar-fill" id="camCpuBar" style="width: 0%"></div></div>
+              </div>
+              <div class="mini-metric-item">
+                <div class="mini-metric-label">RAM Heap</div>
+                <div class="mini-metric-val" id="camRamVal">-- MB</div>
+                <div class="mini-metric-bar"><div class="mini-bar-fill" id="camRamBar" style="width: 0%"></div></div>
+              </div>
+              <div class="mini-metric-item">
+                <div class="mini-metric-label">GPU</div>
+                <div class="mini-metric-val" id="camGpuVal">Tốt</div>
+                <div class="mini-metric-bar"><div class="mini-bar-fill success" id="camGpuBar" style="width: 100%"></div></div>
+              </div>
+            </div>
+            <div id="camConflictAlert" class="conflict-inline-alert hidden"></div>
+            <div class="card-actions-row">
+              <button id="btnCamCheckConflict" class="btn btn-outline btn-sm" type="button" data-tooltip="Kiểm tra ứng dụng khác có đang chiếm camera hay CPU/GPU không">
+                <i class="fa-solid fa-shield-virus"></i> Kiểm tra xung đột
+              </button>
+              <a href="#monitor" class="btn-link-sm" id="btnLinkToMonitor" data-page="monitor">
+                Chi tiết HĐH <i class="fa-solid fa-arrow-right"></i>
+              </a>
+            </div>
           </div>
 
         </div>
@@ -284,19 +347,24 @@
         </div>
       </div>
 
-      <!-- Hàng 3 thẻ đo: CPU, GPU, RAM -->
-      <div class="row-metrics">
+      <!-- Nhóm 1: Năng lực tính toán & Đồ họa (CPU, GPU, RAM) - 3 cột cân xứng -->
+      <div class="monitor-group-label">
+        <span class="group-title"><i class="fa-solid fa-microchip"></i> Năng lực tính toán &amp; Đồ họa</span>
+        <span class="group-desc">3 thành phần cốt lõi: CPU &bull; GPU &bull; RAM</span>
+      </div>
+      <div class="row-metrics-primary">
         <!-- Thẻ CPU -->
         <div class="card card-monitor-stat">
           <div class="card-head">
-            <h2><i class="fa-solid fa-microchip"></i> CPU (Vi xử lý)</h2>
+            <h2><i class="fa-solid fa-microchip"></i> Bộ vi xử lý (CPU)</h2>
             <span class="badge-tag" id="cpuCoresTag">-- Luồng</span>
           </div>
+          <div class="card-subtitle">Đo mức độ bận rộn của máy tính khi phân tích AI</div>
           <div class="gauge-display">
             <div class="gauge-circle" id="cpuGaugeCircle">
               <div class="gauge-inner">
                 <div class="gauge-val" id="cpuPercentVal">--%</div>
-                <div class="gauge-sub">Tải ước tính</div>
+                <div class="gauge-sub">Mức sử dụng</div>
               </div>
             </div>
           </div>
@@ -305,26 +373,27 @@
           </div>
           <div class="metric-details-list">
             <div class="metric-detail-row">
-              <span>Độ trễ Main Thread:</span>
+              <span>Độ trễ xử lý (Lag):</span>
               <b id="cpuLagVal">-- ms</b>
             </div>
             <div class="metric-detail-row">
-              <span>Khung hình render:</span>
+              <span>Tốc độ khung hình:</span>
               <b id="cpuFpsVal">-- FPS</b>
             </div>
             <div class="metric-detail-row">
-              <span>Trạng thái luồng:</span>
+              <span>Trạng thái máy tính:</span>
               <b id="cpuStatusText" class="text-success">Mượt mà</b>
             </div>
           </div>
         </div>
 
-        <!-- Thẻ GPU / Bộ xử lý đồ họa (Góc nhìn Hệ điều hành) -->
+        <!-- Thẻ GPU / Bộ xử lý đồ họa (Góc nhìn Hệ điều hành & Phần cứng) -->
         <div class="card card-monitor-stat card-monitor-gpu">
           <div class="card-head">
-            <h2><i class="fa-solid fa-tv"></i> Thiết bị GPU</h2>
-            <span class="badge-tag" id="gpuAccelBadge">Driver</span>
+            <h2><i class="fa-solid fa-tv"></i> Card đồ họa (GPU)</h2>
+            <span class="badge-tag" id="gpuAccelBadge" data-tooltip="Trình duyệt dùng GPU máy tính để tăng tốc phát và dựng video">Tăng tốc 3D</span>
           </div>
+          <div class="card-subtitle">Khả năng hỗ trợ phát &amp; giải mã video mượt mà</div>
           <div class="gauge-display">
             <div class="gauge-circle gpu-circle" id="gpuGaugeCircle">
               <div class="gauge-inner">
@@ -338,16 +407,16 @@
           </div>
           <div class="metric-details-list">
             <div class="metric-detail-row">
-              <span>Thiết bị phần cứng:</span>
+              <span>Phần cứng GPU:</span>
               <b id="gpuRendererName" class="val-ellipsis" title="Đang phát hiện...">Đang tải...</b>
             </div>
             <div class="metric-detail-row">
-              <span>Trình điều khiển (Driver):</span>
-              <b id="gpuAccelText" class="text-success">Điều phối tốt</b>
+              <span>Trình điều khiển:</span>
+              <b id="gpuAccelText" class="text-success">Hoạt động ổn định</b>
             </div>
             <div class="metric-detail-row">
               <span>Tranh chấp tài nguyên:</span>
-              <b id="gpuStatusText" class="text-success">Không xung đột</b>
+              <b id="gpuStatusText" class="text-success">Không bị chiếm giữ</b>
             </div>
           </div>
           <span id="gpuVendorName" style="display:none"></span>
@@ -357,14 +426,15 @@
         <!-- Thẻ RAM -->
         <div class="card card-monitor-stat">
           <div class="card-head">
-            <h2><i class="fa-solid fa-memory"></i> Bộ nhớ RAM</h2>
+            <h2><i class="fa-solid fa-memory"></i> Bộ nhớ tạm (RAM)</h2>
             <span class="badge-tag" id="deviceRamTag">-- GB RAM</span>
           </div>
+          <div class="card-subtitle">Dung lượng bộ nhớ máy cấp cho trang web xử lý</div>
           <div class="gauge-display">
             <div class="gauge-circle ram-circle" id="ramGaugeCircle">
               <div class="gauge-inner">
                 <div class="gauge-val" id="ramPercentVal">--%</div>
-                <div class="gauge-sub">Chiếm dụng Heap</div>
+                <div class="gauge-sub">Bộ nhớ đang dùng</div>
               </div>
             </div>
           </div>
@@ -373,16 +443,103 @@
           </div>
           <div class="metric-details-list">
             <div class="metric-detail-row">
-              <span>RAM sử dụng (Heap):</span>
+              <span>RAM đang sử dụng:</span>
               <b id="ramUsedVal">-- MB</b>
             </div>
             <div class="metric-detail-row">
-              <span>Hạn mức bộ nhớ tab:</span>
+              <span>Giới hạn bộ nhớ an toàn:</span>
               <b id="ramLimitVal">-- MB</b>
             </div>
             <div class="metric-detail-row">
-              <span>Áp lực bộ nhớ:</span>
-              <b id="ramStatusText" class="text-success">Bình thường</b>
+              <span>Tình trạng bộ nhớ:</span>
+              <b id="ramStatusText" class="text-success">Dồi dào, an toàn</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nhóm 2: Băng thông mạng & Tốc độ lưu trữ (Card Mạng, Ổ cứng SSD) - 2 cột rộng rãi -->
+      <div class="monitor-group-label">
+        <span class="group-title"><i class="fa-solid fa-network-wired"></i> Băng thông mạng &amp; Tốc độ lưu trữ I/O</span>
+        <span class="group-desc">2 kênh truyền nạp dữ liệu: Internet &bull; Ổ đĩa máy tính</span>
+      </div>
+      <div class="row-metrics-secondary">
+        <!-- Thẻ Card Mạng & Băng thông (NIC / Network Interface) -->
+        <div class="card card-monitor-stat card-monitor-wide">
+          <div class="card-head">
+            <h2><i class="fa-solid fa-network-wired"></i> Tốc độ mạng (Internet)</h2>
+            <span class="badge-tag" id="netTypeTag">LAN / Wi-Fi</span>
+          </div>
+          <div class="card-subtitle">Độ mạnh đường truyền kết nối giữa máy và máy chủ AI</div>
+          <div class="monitor-wide-body">
+            <div class="monitor-wide-gauge-col">
+              <div class="gauge-display">
+                <div class="gauge-circle net-circle" id="netGaugeCircle">
+                  <div class="gauge-inner">
+                    <div class="gauge-val" id="netSpeedVal">-- Mbps</div>
+                    <div class="gauge-sub">Tốc độ tải xuống</div>
+                  </div>
+                </div>
+              </div>
+              <div class="metric-progress-bar">
+                <div class="metric-progress-fill success" id="netBarFill" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="monitor-wide-details-col">
+              <div class="metric-details-list">
+                <div class="metric-detail-row">
+                  <span>Độ trễ đường truyền (Ping):</span>
+                  <b id="netRttVal">-- ms</b>
+                </div>
+                <div class="metric-detail-row">
+                  <span>Tốc độ đề xuất:</span>
+                  <b>&ge; 15 Mbps (ổn định)</b>
+                </div>
+                <div class="metric-detail-row">
+                  <span>Chất lượng kết nối:</span>
+                  <b id="netStatusText" class="text-success">Thông suốt</b>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Thẻ Ổ cứng & Bộ nhớ ngoài (SSD / HDD Storage I/O) -->
+        <div class="card card-monitor-stat card-monitor-wide">
+          <div class="card-head">
+            <h2><i class="fa-solid fa-hard-drive"></i> Ổ cứng máy tính (SSD)</h2>
+            <span class="badge-tag" id="diskTypeTag">SSD Siêu tốc</span>
+          </div>
+          <div class="card-subtitle">Tốc độ đọc và mở file video từ ổ đĩa máy tính</div>
+          <div class="monitor-wide-body">
+            <div class="monitor-wide-gauge-col">
+              <div class="gauge-display">
+                <div class="gauge-circle disk-circle" id="diskGaugeCircle">
+                  <div class="gauge-inner">
+                    <div class="gauge-val" id="diskPercentVal">350 MB/s</div>
+                    <div class="gauge-sub">Tốc độ đọc file</div>
+                  </div>
+                </div>
+              </div>
+              <div class="metric-progress-bar">
+                <div class="metric-progress-fill success" id="diskBarFill" style="width: 25%"></div>
+              </div>
+            </div>
+            <div class="monitor-wide-details-col">
+              <div class="metric-details-list">
+                <div class="metric-detail-row">
+                  <span>Bộ nhớ đệm lưu trữ:</span>
+                  <b id="diskQuotaVal">Đang kiểm tra...</b>
+                </div>
+                <div class="metric-detail-row">
+                  <span>Độ trễ tìm file (Seek):</span>
+                  <b>~0.1 ms (Rất nhanh)</b>
+                </div>
+                <div class="metric-detail-row">
+                  <span>Hiệu suất đọc ghi:</span>
+                  <b id="diskIoStatusText" class="text-success">Phản hồi tức thì</b>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -391,7 +548,7 @@
       <!-- Thẻ Kiểm tra Xung đột hệ thống -->
       <div class="card card-conflict-check">
         <div class="card-head">
-          <h2></i> Bảng kiểm tra xung đột với các phần mềm đang chạy trên máy</h2>
+          <h2><i class="fa-solid fa-shield-halved"></i> Bảng kiểm tra tương thích &amp; Xung đột ứng dụng trên máy</h2>
           <div class="card-tools">
             <span id="conflictScanTime" class="text-muted text-xs">Vừa quét</span>
           </div>
@@ -401,22 +558,22 @@
         <div id="conflictMainBanner" class="conflict-banner ok">
           <div class="conflict-banner-icon"><i class="fa-solid fa-circle-check"></i></div>
           <div class="conflict-banner-content">
-            <div class="conflict-banner-title" id="conflictBannerTitle">Hệ thống đang hoạt động tối ưu — Không phát hiện xung đột</div>
-            <div class="conflict-banner-desc" id="conflictBannerDesc">Camera, GPU, CPU, RAM và kết nối API đều sẵn sàng xử lý video và nhận diện thời gian thực.</div>
+            <div class="conflict-banner-title" id="conflictBannerTitle">Máy tính sẵn sàng — Không phát hiện xung đột nào</div>
+            <div class="conflict-banner-desc" id="conflictBannerDesc">Camera, Card màn hình, CPU, RAM, Ổ cứng và Mạng đều đang ở trạng thái tốt nhất để chạy ứng dụng.</div>
           </div>
         </div>
 
-        <!-- Danh sách 5 module kiểm tra dạng lưới 2 cột cân đối -->
+        <!-- Danh sách 6 module kiểm tra dạng lưới 2 cột cân đối -->
         <div class="conflict-grid">
           <!-- Item 1: Camera -->
           <div class="conflict-item" id="chkCameraItem">
             <div class="conflict-item-icon"><i class="fa-solid fa-video"></i></div>
             <div class="conflict-item-body">
               <div class="conflict-item-head">
-                <span class="conflict-item-title">Xung đột Camera &amp; Thiết bị quay</span>
+                <span class="conflict-item-title">Xung đột Camera &amp; Webcam</span>
                 <span class="conflict-status-badge ok" id="chkCameraBadge"><i class="fa-solid fa-check"></i> Sẵn sàng</span>
               </div>
-              <div class="conflict-item-text" id="chkCameraDesc">Không phát hiện ứng dụng nào (Zoom, Teams, OBS, Zalo, Camera Windows...) khóa độc quyền webcam.</div>
+              <div class="conflict-item-text" id="chkCameraDesc">Không có ứng dụng nào (như Zoom, Google Meet, Teams, Zalo...) đang chiếm camera của bạn.</div>
             </div>
           </div>
 
@@ -425,10 +582,10 @@
             <div class="conflict-item-icon"><i class="fa-solid fa-tv"></i></div>
             <div class="conflict-item-body">
               <div class="conflict-item-head">
-                <span class="conflict-item-title">Xung đột Driver GPU &amp; Thiết bị</span>
-                <span class="conflict-status-badge ok" id="chkGpuBadge"><i class="fa-solid fa-check"></i> Driver sẵn sàng</span>
+                <span class="conflict-item-title">Card đồ họa &amp; Trình điều khiển</span>
+                <span class="conflict-status-badge ok" id="chkGpuBadge"><i class="fa-solid fa-check"></i> Sẵn sàng</span>
               </div>
-              <div class="conflict-item-text" id="chkGpuDesc">Trình điều khiển thiết bị (WDDM/HAL) hoạt động trực tiếp qua phần cứng, không bị tranh chấp tài nguyên với tiến trình khác của hệ điều hành.</div>
+              <div class="conflict-item-text" id="chkGpuDesc">Card đồ họa hoạt động tốt, hỗ trợ tăng tốc phát và giải mã video mượt mà.</div>
             </div>
           </div>
 
@@ -437,10 +594,10 @@
             <div class="conflict-item-icon"><i class="fa-solid fa-microchip"></i></div>
             <div class="conflict-item-body">
               <div class="conflict-item-head">
-                <span class="conflict-item-title">Xung đột Luồng CPU &amp; Ứng dụng nền</span>
+                <span class="conflict-item-title">Bộ vi xử lý CPU &amp; Ứng dụng ngầm</span>
                 <span class="conflict-status-badge ok" id="chkCpuBadge"><i class="fa-solid fa-check"></i> Phản hồi nhanh</span>
               </div>
-              <div class="conflict-item-text" id="chkCpuDesc">Độ trễ luồng xử lý rất thấp, không có tiến trình chạy ngầm nào làm nghẽn tiến trình AI.</div>
+              <div class="conflict-item-text" id="chkCpuDesc">Máy tính phản hồi nhanh, không có phần mềm ngầm nào gây đơ hoặc giật lag.</div>
             </div>
           </div>
 
@@ -449,33 +606,45 @@
             <div class="conflict-item-icon"><i class="fa-solid fa-memory"></i></div>
             <div class="conflict-item-body">
               <div class="conflict-item-head">
-                <span class="conflict-item-title">Xung đột Bộ nhớ RAM &amp; Áp lực tràn bộ nhớ</span>
+                <span class="conflict-item-title">Bộ nhớ RAM máy tính</span>
                 <span class="conflict-status-badge ok" id="chkRamBadge"><i class="fa-solid fa-check"></i> Bộ nhớ an toàn</span>
               </div>
-              <div class="conflict-item-text" id="chkRamDesc">Mức chiếm dụng JavaScript Heap ở mức an toàn, bộ nhớ đủ để tải và phân tích video độ phân giải cao.</div>
+              <div class="conflict-item-text" id="chkRamDesc">Dung lượng RAM trống dồi dào, đủ để mở và phân tích các video độ nét cao.</div>
             </div>
           </div>
 
-          <!-- Item 5: API & Mạng (Toàn chiều rộng) -->
-          <div class="conflict-item conflict-item-full" id="chkNetItem">
+          <!-- Item 5: API & Mạng -->
+          <div class="conflict-item" id="chkNetItem">
             <div class="conflict-item-icon"><i class="fa-solid fa-network-wired"></i></div>
             <div class="conflict-item-body">
               <div class="conflict-item-head">
-                <span class="conflict-item-title">Xung đột Mạng &amp; Tường lửa với Gemini API</span>
+                <span class="conflict-item-title">Kết nối Internet &amp; Máy chủ AI</span>
                 <span class="conflict-status-badge ok" id="chkNetBadge"><i class="fa-solid fa-check"></i> Thông suốt</span>
               </div>
-              <div class="conflict-item-text" id="chkNetDesc">Đường truyền tới máy chủ Google AI hoạt động bình thường, không bị chặn bởi Tường lửa, VPN hoặc Antivirus.</div>
+              <div class="conflict-item-text" id="chkNetDesc">Đường truyền tới máy chủ Google AI thông suốt, không bị chặn bởi tường lửa hay mạng yếu.</div>
+            </div>
+          </div>
+
+          <!-- Item 6: Ổ cứng SSD/HDD I/O -->
+          <div class="conflict-item" id="chkDiskItem">
+            <div class="conflict-item-icon"><i class="fa-solid fa-hard-drive"></i></div>
+            <div class="conflict-item-body">
+              <div class="conflict-item-head">
+                <span class="conflict-item-title">Tốc độ đọc file từ Ổ cứng (SSD/HDD)</span>
+                <span class="conflict-status-badge ok" id="chkDiskBadge"><i class="fa-solid fa-check"></i> Ổ cứng mượt</span>
+              </div>
+              <div class="conflict-item-text" id="chkDiskDesc">Tốc độ đọc ổ cứng rất nhanh, nạp video vào màn hình ngay lập tức mà không phải chờ.</div>
             </div>
           </div>
         </div>
 
         <!-- Khuyến nghị khi có xung đột -->
         <div id="conflictTipsBox" class="conflict-tips-box">
-          <div class="tips-title"><i class="fa-solid fa-lightbulb"></i> Lời khuyên tối ưu hiệu năng và tránh xung đột:</div>
+          <div class="tips-title"><i class="fa-solid fa-lightbulb"></i> Mẹo nhỏ giúp ứng dụng hoạt động nhanh và mượt mà nhất:</div>
           <ul class="tips-list" id="conflictTipsList">
-            <li>Nếu bật camera báo lỗi, kiểm tra xem Zoom, Google Meet, OBS Studio hoặc Zalo có đang mở camera hay không.</li>
-            <li>Đảm bảo trình duyệt đã bật <b>"Use graphics acceleration when available"</b> trong phần Cài đặt nâng cao của trình duyệt.</li>
-            <li>Khi phân tích video dài, đóng bớt các tab không sử dụng để giải phóng bộ nhớ RAM cho AI xử lý mượt hơn.</li>
+            <li><b>Nếu camera không lên hình:</b> Hãy kiểm tra xem bạn có đang mở Zoom, Google Meet hoặc Zalo không và đóng các ứng dụng đó.</li>
+            <li><b>Để xem video mượt nhất:</b> Đảm bảo trình duyệt đã bật tính năng "Sử dụng chế độ tăng tốc phần cứng" trong Cài đặt của trình duyệt Chrome/Edge.</li>
+            <li><b>Khi phân tích video lớn:</b> Đóng bớt các tab trình duyệt không dùng để máy tính tập trung bộ nhớ RAM cho AI xử lý nhanh hơn.</li>
           </ul>
         </div>
       </div>

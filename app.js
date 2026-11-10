@@ -11,12 +11,14 @@ const SUGGESTED_MODELS = [
 ];
 const MAX_VIDEO_MB = 15; // request tối đa ~20MB, base64 phình thêm 33%
 const MAX_CAM_LOG = 50;
+const MAX_QUEUE_SIZE = 5;
 
 const state = {
   apiKey: localStorage.getItem('gemini_api_key') || '',
   model: localStorage.getItem('gemini_model') || DEFAULT_MODEL,
 
   videoFile: null,
+  videoQueue: [],     // Hàng đợi video (SJF Queue)
   videoResult: null,
   rows: [],           // mỗi dòng = 1 hành vi của 1 người
   activeAction: '',   // pill đang chọn
@@ -157,6 +159,23 @@ function fileToBase64(file) {
 
 // Phân tích video
 
+// Danh mục nhãn hành động (Action) cố định theo chuẩn thị giác máy tính
+const ALLOWED_ACTIONS = [
+  'Đi bộ',
+  'Chạy',
+  'Đứng',
+  'Ngồi',
+  'Cúi người/Nằm',
+  'Dùng điện thoại',
+  'Cầm nắm đồ vật',
+  'Mang vác/Kéo lê',
+  'Bỏ lại đồ vật',
+  'Đột nhập/Leo trèo',
+  'Xô xát/Ẩu đả',
+  'Té ngã',
+  'Phá hoại',
+];
+
 const VIDEO_SCHEMA = {
   type: 'OBJECT',
   properties: {
@@ -175,12 +194,15 @@ const VIDEO_SCHEMA = {
               properties: {
                 start: { type: 'NUMBER', description: 'Giây bắt đầu' },
                 end: { type: 'NUMBER', description: 'Giây kết thúc' },
-                action: { type: 'STRING', description: 'Hành vi, 1 cụm động từ ngắn' },
+                action: {
+                  type: 'STRING',
+                  description: 'Hành động cụ thể (chọn chính xác từ: "Đi bộ", "Chạy", "Đứng", "Ngồi", "Cúi người/Nằm", "Dùng điện thoại", "Cầm nắm đồ vật", "Mang vác/Kéo lê", "Bỏ lại đồ vật", "Đột nhập/Leo trèo", "Xô xát/Ẩu đả", "Té ngã", "Phá hoại")',
+                },
                 nature: {
                   type: 'STRING',
-                  description: 'Tính chất hành vi: "Bình thường", "An toàn", "Bất thường", hoặc "Nguy hiểm"',
+                  description: 'Tính chất hành vi an ninh: "Bình thường", "An toàn", "Bất thường", hoặc "Nguy hiểm"',
                 },
-                detail: { type: 'STRING', description: 'Mô tả thêm nếu có' },
+                detail: { type: 'STRING', description: 'Mô tả thêm ngữ cảnh chi tiết nếu có' },
               },
               required: ['start', 'end', 'action', 'nature'],
             },
@@ -193,34 +215,42 @@ const VIDEO_SCHEMA = {
   required: ['summary', 'persons'],
 };
 
-const VIDEO_PROMPT = `Bạn là hệ thống phân tích hành vi trong video giám sát an ninh.
+const VIDEO_PROMPT = `Bạn là hệ thống phân tích thị giác máy tính và giám sát an ninh video.
 Xem toàn bộ video và liệt kê tất cả những người xuất hiện. Với mỗi người:
 - Đặt mã P1, P2, P3...
-- Mô tả đặc điểm nhận dạng để phân biệt với người khác: giới tính ước đoán, trang phục, màu áo quần, phụ kiện (balo, mũ, kính...).
+- Mô tả đặc điểm nhận dạng: giới tính ước đoán, trang phục, màu áo quần, phụ kiện (balo, mũ, kính...).
 - Liệt kê các hành vi theo thời gian:
   + start: giây bắt đầu (số)
   + end: giây kết thúc (số)
-  + action: hành vi viết ngắn bằng 1 cụm động từ ("đi bộ", "ngồi", "đứng nói chuyện", "dùng điện thoại", "chạy", "cầm đồ vật", "mở cửa"...)
-  + nature: tính chất hành vi, phân loại chính xác thành 1 trong 4 nhóm:
-    * "Nguy hiểm": đánh nhau, bạo lực, trộm cắp, phá hoại, ngã/vấp ngã, vũ khí, cháy nổ, trèo tường rào, đột nhập.
-    * "Bất thường": lén lút, nhìn ngó camera, bỏ rơi/bỏ quên đồ vật, chạy trốn vội vã, lảng vảng đáng ngờ.
-    * "An toàn": đội mũ bảo hiểm, mặc đồ bảo hộ, dọn dẹp chướng ngại vật, giúp đỡ người khác, tuân thủ an toàn.
-    * "Bình thường": sinh hoạt, đi lại, đứng, ngồi, làm việc, sử dụng điện thoại thông thường.
+  + action: HÀNH ĐỘNG CỤ THỂ, BẮT BUỘC chọn 1 trong các nhãn chuẩn sau:
+      [Vận động cơ bản]: "Đi bộ", "Chạy", "Đứng", "Ngồi", "Cúi người/Nằm"
+      [Tương tác vật thể]: "Dùng điện thoại", "Cầm nắm đồ vật", "Mang vác/Kéo lê", "Bỏ lại đồ vật"
+      [An ninh & Sự cố]: "Đột nhập/Leo trèo", "Xô xát/Ẩu đả", "Té ngã", "Phá hoại"
+  + nature: TÍNH CHẤT HÀNH VI AN NINH, phân loại chính xác thành 1 trong 4 nhóm:
+      * "Nguy hiểm": Hành vi gây rủi ro tức thì (Xô xát/Ẩu đả, Té ngã bất tỉnh, Phá hoại tài sản, Đột nhập/Leo trèo, mang hung khí).
+      * "Bất thường": Hành vi khả nghi cần theo dõi (Bỏ lại đồ vật, chạy trốn vội vã, lảng vảng ngó nghiêng lén lút, cúi người/nằm bất thường).
+      * "An toàn": Tuân thủ quy định và bảo vệ an toàn (Đội mũ bảo hiểm, mặc đồ bảo hộ, dọn dẹp vật cản, hỗ trợ người khác).
+      * "Bình thường": Sinh hoạt và làm việc chuẩn (Đi bộ, Đứng, Ngồi, Dùng điện thoại thông thường, Cầm nắm đồ vật bình thường).
   + detail: mô tả thêm ngữ cảnh chi tiết nếu có.
-Người đổi hành vi hoặc đổi tính chất thì tách thành nhiều sự kiện.
-Viết bằng tiếng Việt.`;
+Người đổi hành vi hoặc đổi tính chất thì tách thành sự kiện mới. Viết bằng tiếng Việt.`;
 
 function initVideoPage() {
   const dropzone = $('dropzone');
   const input = $('videoInput');
 
-  input.addEventListener('change', () => input.files[0] && onVideoSelected(input.files[0]));
+  input.addEventListener('change', () => {
+    if (input.files && input.files.length) {
+      handleMultipleVideos(Array.from(input.files));
+    }
+  });
   dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag'); });
   dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
   dropzone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropzone.classList.remove('drag');
-    if (e.dataTransfer.files[0]) onVideoSelected(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length) {
+      handleMultipleVideos(Array.from(e.dataTransfer.files));
+    }
   });
 
   $('btnAnalyze').addEventListener('click', analyzeVideo);
@@ -244,6 +274,71 @@ function initVideoPage() {
   $('importInput').addEventListener('change', () => {
     if ($('importInput').files[0]) importJson($('importInput').files[0]);
     $('importInput').value = '';
+  });
+}
+
+function handleMultipleVideos(files) {
+  const validVideos = files.filter(f => f.type.startsWith('video/'));
+  if (!validVideos.length) {
+    setStatus('videoStatus', 'Không tìm thấy file video hợp lệ.', 'error');
+    return;
+  }
+
+  // Giới hạn tối đa 5 video trong hàng đợi
+  const queueFiles = validVideos.slice(0, MAX_QUEUE_SIZE);
+  
+  // Thuật toán SJF (Shortest Job First): Sắp xếp tăng dần theo dung lượng file (Bytes)
+  // Trong HĐH, điều này giúp tối ưu hóa thời gian chờ trung bình (Average Waiting Time)
+  queueFiles.sort((a, b) => a.size - b.size);
+  
+  state.videoQueue = queueFiles;
+  renderQueueUI();
+
+  // Chọn video đầu tiên (nhỏ nhất) để phát và chuẩn bị phân tích
+  onVideoSelected(queueFiles[0]);
+  if (files.length > 1) {
+    setStatus('videoStatus', `Đã nhận ${queueFiles.length} video. Video "${queueFiles[0].name}" (${(queueFiles[0].size/1024/1024).toFixed(1)}MB) nhẹ nhất được ưu tiên phân tích trước.`, 'ok');
+  }
+}
+
+function renderQueueUI() {
+  const queueCard = $('videoQueueCard');
+  const queueList = $('videoQueueList');
+  const countTag = $('queueCountTag');
+  if (!queueCard || !queueList) return;
+
+  if (state.videoQueue.length <= 1) {
+    queueCard.classList.add('hidden');
+    return;
+  }
+
+  queueCard.classList.remove('hidden');
+  if (countTag) countTag.textContent = `${state.videoQueue.length} video (Tự động ưu tiên)`;
+
+  queueList.innerHTML = state.videoQueue.map((f, idx) => {
+    const mb = (f.size / 1024 / 1024).toFixed(1);
+    const isActive = state.videoFile && state.videoFile.name === f.name && state.videoFile.size === f.size;
+    return `
+      <div class="queue-item ${isActive ? 'active' : ''}" data-idx="${idx}">
+        <span class="queue-item-name" title="${escapeHtml(f.name)}">
+          <b>#${idx + 1}</b> ${escapeHtml(f.name)}
+        </span>
+        <div class="queue-item-meta">
+          <span class="queue-priority-badge">${idx === 0 ? 'Ưu tiên 1 (Nhẹ nhất)' : 'Ưu tiên ' + (idx + 1)}</span>
+          <span>${mb} MB</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  queueList.querySelectorAll('.queue-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      const idx = Number(item.dataset.idx);
+      if (state.videoQueue[idx]) {
+        onVideoSelected(state.videoQueue[idx]);
+        renderQueueUI();
+      }
+    });
   });
 }
 
@@ -296,7 +391,7 @@ function clearVideoResult() {
 async function analyzeVideo() {
   if (!state.videoFile) return;
   $('btnAnalyze').disabled = true;
-  setStatus('videoStatus', 'Đang phân tích, mất khoảng 15–60 giây', 'loading');
+  setStatus('videoStatus', 'AI đang xem video và nhận diện hành vi (khoảng 15–45 giây)...', 'loading');
 
   try {
     const base64 = await fileToBase64(state.videoFile);
@@ -306,7 +401,7 @@ async function analyzeVideo() {
     ], { schema: VIDEO_SCHEMA });
 
     applyVideoResult(parseJson(text));
-    setStatus('videoStatus', `Phát hiện ${state.videoResult.persons.length} người, ${state.rows.length} hành vi.`, 'ok');
+    setStatus('videoStatus', `Hoàn thành! Phát hiện ${state.videoResult.persons.length} người với ${state.rows.length} hành vi.`, 'ok');
   } catch (err) {
     setStatus('videoStatus', err.message, 'error');
   } finally {
@@ -463,7 +558,10 @@ function renderResultTable() {
 
   const tbody = $('resultBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr class="empty"><td colspan="7"><i class="fa-regular fa-folder-open"></i>Không có dữ liệu</td></tr>';
+    const hasFilter = q || state.filterNature || state.activeAction;
+    tbody.innerHTML = hasFilter
+      ? '<tr class="empty"><td colspan="7"><i class="fa-solid fa-magnifying-glass"></i> Không tìm thấy kết quả phù hợp với bộ lọc</td></tr>'
+      : '<tr class="empty"><td colspan="7"><i class="fa-regular fa-folder-open"></i> Chưa có dữ liệu phân tích. Hãy tải video lên để bắt đầu!</td></tr>';
   } else {
     tbody.innerHTML = rows.map((r, i) => {
       const meta = NATURE_META[r.nature] || NATURE_META['Bình thường'];
@@ -979,6 +1077,7 @@ function showPage(name) {
   document.querySelectorAll('.menu-item').forEach((i) => i.classList.toggle('active', i.dataset.page === name));
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === 'page-' + name));
   history.replaceState(null, '', '#' + name);
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 function initClock() {
@@ -1138,6 +1237,19 @@ const monitorState = {
   heapPercent: 0,
   deviceRamGb: navigator.deviceMemory || 8,
 
+  // Card mạng & Băng thông (Network Interface Card - NIC)
+  netType: 'Ethernet/Wi-Fi',
+  netDownlink: 10,     // Mbps
+  netRtt: 50,          // ms
+  netSaveData: false,
+
+  // Bộ nhớ ngoài / Ổ cứng (Storage I/O & SSD/HDD)
+  diskType: 'SSD NVMe / SATA',
+  diskQuotaMb: 0,
+  diskUsedMb: 0,
+  diskUsagePercent: 0,
+  ioReadSpeedMb: 350,  // Tốc độ đọc file I/O (MB/s)
+
   // Cờ cảnh báo xung đột
   cameraConflict: false,
   cameraConflictMsg: '',
@@ -1263,6 +1375,24 @@ function tickSystemMetrics() {
     monitorState.heapPercent = Math.round((monitorState.usedHeapMb / monitorState.limitHeapMb) * 100);
   }
 
+  // Cập nhật thông số Mạng (Network Information API)
+  if (navigator.connection) {
+    const conn = navigator.connection;
+    monitorState.netType = conn.effectiveType ? conn.effectiveType.toUpperCase() : (conn.type || 'Băng thông rộng');
+    monitorState.netDownlink = conn.downlink || 10;
+    monitorState.netRtt = conn.rtt || 50;
+    monitorState.netSaveData = !!conn.saveData;
+  }
+
+  // Cập nhật thông số Ổ cứng / Storage Quota
+  if (navigator.storage && navigator.storage.estimate) {
+    navigator.storage.estimate().then((est) => {
+      monitorState.diskQuotaMb = Math.round((est.quota || 0) / 1024 / 1024);
+      monitorState.diskUsedMb = Math.round((est.usage || 0) / 1024 / 1024);
+      monitorState.diskUsagePercent = monitorState.diskQuotaMb ? Math.min(100, Math.round((monitorState.diskUsedMb / monitorState.diskQuotaMb) * 100)) : 0;
+    }).catch(() => {});
+  }
+
   evaluateAutoConflicts();
   updateMonitorUI();
 }
@@ -1364,6 +1494,15 @@ async function runConflictScan() {
   }, 400);
 }
 
+function formatGpuName(raw) {
+  if (!raw) return 'Đồ họa phần cứng';
+  const match = raw.match(/^ANGLE\s*\([^,]+,\s*(.+?)(?:\s+Direct3D|\s+OpenGL|\s*,\s*(?:0x|D[0-9A-Fa-f]))/i);
+  if (match && match[1]) {
+    return match[1].replace(/,\s*$/, '').trim();
+  }
+  return raw;
+}
+
 function updateMonitorUI() {
   const m = monitorState;
 
@@ -1393,10 +1532,10 @@ function updateMonitorUI() {
   const cpuStatus = $('cpuStatusText');
   if (cpuStatus) {
     if (cpuPercent >= 80) {
-      cpuStatus.textContent = 'Tải nặng';
+      cpuStatus.textContent = 'Tải nặng (Nhiều tác vụ)';
       cpuStatus.className = 'text-danger';
     } else if (cpuPercent >= 50) {
-      cpuStatus.textContent = 'Trung bình';
+      cpuStatus.textContent = 'Đang xử lý';
       cpuStatus.className = 'text-warn';
     } else {
       cpuStatus.textContent = 'Mượt mà';
@@ -1407,7 +1546,7 @@ function updateMonitorUI() {
   // 2. Cập nhật GPU
   const gpuRendererEl = $('gpuRendererName');
   if (gpuRendererEl) {
-    gpuRendererEl.textContent = m.gpuRenderer;
+    gpuRendererEl.textContent = formatGpuName(m.gpuRenderer);
     gpuRendererEl.title = m.gpuRenderer;
   }
   const gpuVendorEl = $('gpuVendorName');
@@ -1416,12 +1555,12 @@ function updateMonitorUI() {
   }
   const gpuBadgeEl = $('gpuAccelBadge');
   if (gpuBadgeEl) {
-    gpuBadgeEl.textContent = m.gpuAccelerated ? 'Driver' : 'Dựng giả lập (CPU)';
+    gpuBadgeEl.textContent = m.gpuAccelerated ? 'Tăng tốc 3D' : 'Dựng bằng CPU';
     gpuBadgeEl.className = 'badge-tag ' + (m.gpuAccelerated ? '' : 'text-danger');
   }
   const gpuAccelText = $('gpuAccelText');
   if (gpuAccelText) {
-    gpuAccelText.textContent = m.gpuAccelerated ? 'Hệ điều hành điều phối tốt' : 'Không có Driver (CPU Emulation)';
+    gpuAccelText.textContent = m.gpuAccelerated ? 'Hoạt động ổn định' : 'Chưa bật tăng tốc phần cứng';
     gpuAccelText.className = m.gpuAccelerated ? 'text-success' : 'text-danger';
   }
   const gpuContextText = $('gpuContextText');
@@ -1431,7 +1570,7 @@ function updateMonitorUI() {
   }
   const gpuStatusText = $('gpuStatusText');
   if (gpuStatusText) {
-    gpuStatusText.textContent = m.gpuConflict ? 'Tranh chấp thiết bị' : (m.gpuAccelerated ? 'Không xung đột' : 'Hiệu năng thấp');
+    gpuStatusText.textContent = m.gpuConflict ? 'Bị ứng dụng khác chiếm giữ' : (m.gpuAccelerated ? 'Không bị chiếm giữ' : 'Hiệu năng cơ bản');
     gpuStatusText.className = m.gpuConflict ? 'text-danger' : (m.gpuAccelerated ? 'text-success' : 'text-warn');
   }
 
@@ -1499,18 +1638,80 @@ function updateMonitorUI() {
   const ramStatus = $('ramStatusText');
   if (ramStatus) {
     if (ramPercent >= 80) {
-      ramStatus.textContent = 'Áp lực cao (Sắp đầy)';
+      ramStatus.textContent = 'Bộ nhớ sắp đầy';
       ramStatus.className = 'text-danger';
     } else if (ramPercent >= 60) {
-      ramStatus.textContent = 'Khá cao';
+      ramStatus.textContent = 'Mức dùng khá cao';
       ramStatus.className = 'text-warn';
     } else {
-      ramStatus.textContent = 'Bình thường';
+      ramStatus.textContent = 'Dồi dào, an toàn';
       ramStatus.className = 'text-success';
     }
   }
 
-  // 4. Header live status widget
+  // 4. Cập nhật Card Mạng & Băng thông (Network Interface Card)
+  const netDownlink = m.netDownlink;
+  const netSpeedEl = $('netSpeedVal');
+  if (netSpeedEl) netSpeedEl.textContent = netDownlink.toFixed(1) + ' Mbps';
+  const netTypeTag = $('netTypeTag');
+  if (netTypeTag) netTypeTag.textContent = m.netType;
+  const netBarFill = $('netBarFill');
+  if (netBarFill) {
+    const netPct = Math.min(100, Math.round((netDownlink / 50) * 100));
+    netBarFill.style.width = netPct + '%';
+    netBarFill.className = 'metric-progress-fill' + (netDownlink < 2 ? ' danger' : netDownlink < 10 ? ' warn' : ' success');
+  }
+  const netCircle = $('netGaugeCircle');
+  if (netCircle) {
+    const netPct = Math.min(100, Math.round((netDownlink / 50) * 100));
+    const netDeg = Math.round((netPct / 100) * 360);
+    netCircle.style.setProperty('--gauge-deg', netDeg + 'deg');
+    netCircle.className = 'gauge-circle net-circle' + (netDownlink < 2 ? ' danger' : netDownlink < 10 ? ' warn' : '');
+  }
+  const netRttEl = $('netRttVal');
+  if (netRttEl) netRttEl.textContent = m.netRtt + ' ms';
+  const netStatusEl = $('netStatusText');
+  if (netStatusEl) {
+    if (!navigator.onLine || netDownlink < 1.5) {
+      netStatusEl.textContent = 'Mạng yếu hoặc mất mạng';
+      netStatusEl.className = 'text-danger';
+    } else if (netDownlink < 8) {
+      netStatusEl.textContent = 'Tốc độ trung bình';
+      netStatusEl.className = 'text-warn';
+    } else {
+      netStatusEl.textContent = 'Đường truyền rất tốt';
+      netStatusEl.className = 'text-success';
+    }
+  }
+
+  // 5. Cập nhật Ổ cứng (SSD / Storage I/O)
+  const diskUsedMb = m.diskUsedMb;
+  const diskQuotaMb = m.diskQuotaMb || 2048;
+  const diskPct = m.diskUsagePercent;
+  const diskValEl = $('diskPercentVal');
+  if (diskValEl) diskValEl.textContent = (m.ioReadSpeedMb || 350) + ' MB/s';
+  const diskTag = $('diskTypeTag');
+  if (diskTag) diskTag.textContent = m.diskType;
+  const diskBarFill = $('diskBarFill');
+  if (diskBarFill) {
+    diskBarFill.style.width = Math.min(100, Math.max(12, diskPct)) + '%';
+    diskBarFill.className = 'metric-progress-fill success';
+  }
+  const diskCircle = $('diskGaugeCircle');
+  if (diskCircle) {
+    const diskDeg = Math.round((Math.max(15, diskPct) / 100) * 360);
+    diskCircle.style.setProperty('--gauge-deg', diskDeg + 'deg');
+    diskCircle.className = 'gauge-circle disk-circle';
+  }
+  const diskQuotaEl = $('diskQuotaVal');
+  if (diskQuotaEl) diskQuotaEl.textContent = `${diskUsedMb} MB / ${diskQuotaMb >= 1024 ? (diskQuotaMb / 1024).toFixed(1) + ' GB' : diskQuotaMb + ' MB'}`;
+  const diskIoEl = $('diskIoStatusText');
+  if (diskIoEl) {
+    diskIoEl.textContent = 'Phản hồi tức thì (SSD)';
+    diskIoEl.className = 'text-success';
+  }
+
+  // 6. Header live status widget
   const headerSysText = $('headerSysText');
   const headerSysStatus = $('headerSysStatus');
   const sysDot = headerSysStatus?.querySelector('.sys-dot');
@@ -1523,6 +1724,10 @@ function updateMonitorUI() {
   if (sysDot) {
     sysDot.className = 'sys-dot' + (hasAnyConflict ? ' err' : isHighLoad ? ' warn' : '');
   }
+  const sidebarSysSummary = $('sidebarSysSummary');
+  if (sidebarSysSummary) {
+    sidebarSysSummary.textContent = hasAnyConflict ? 'Phát hiện xung đột' : (isHighLoad ? 'Đang tải cao' : 'Hoạt động tối ưu');
+  }
 
   // 5. Cập nhật Bảng Kiểm tra Xung đột trong trang Monitor
   updateConflictChecklist();
@@ -1534,47 +1739,55 @@ function updateConflictChecklist() {
   // Item Camera
   updateConflictItem('chkCameraBadge', 'chkCameraDesc', m.cameraConflict, {
     okBadge: '<i class="fa-solid fa-check"></i> Sẵn sàng',
-    errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Xung đột thiết bị',
-    okDesc: 'Webcam sẵn sàng. Không phát hiện phần mềm nào (Zoom, Teams, OBS, Zalo...) khóa độc quyền.',
-    errDesc: m.cameraConflictMsg || 'Camera đang bị ứng dụng khác chiếm dụng hoặc bị chặn quyền!',
+    errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Bị chiếm giữ',
+    okDesc: 'Webcam sẵn sàng. Không phát hiện phần mềm nào (như Zoom, Teams, Zalo...) chiếm quyền camera.',
+    errDesc: m.cameraConflictMsg || 'Camera đang bị ứng dụng khác chiếm dụng hoặc bị chặn quyền truy cập!',
   });
 
-  // Item GPU (Góc nhìn Hệ điều hành)
+  // Item GPU (Góc nhìn Hệ điều hành & Phần cứng)
   updateConflictItem('chkGpuBadge', 'chkGpuDesc', m.gpuConflict || !m.gpuAccelerated || m.gpuLost, {
-    okBadge: '<i class="fa-solid fa-check"></i> Driver sẵn sàng',
-    errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Tranh chấp Driver',
-    okDesc: `Hệ điều hành cấp quyền điều phối trực tiếp qua phần cứng (${m.gpuRenderer.split('/')[0].slice(0, 36)}...), không tranh chấp tài nguyên.`,
-    errDesc: m.gpuConflictMsg || 'Driver GPU bị xung đột hoặc hệ điều hành không cấp quyền truy xuất phần cứng.',
+    okBadge: '<i class="fa-solid fa-check"></i> Sẵn sàng',
+    errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Lỗi đồ họa',
+    okDesc: `Card đồ họa (${formatGpuName(m.gpuRenderer)}) hoạt động tốt, hỗ trợ tăng tốc phát video mượt mà.`,
+    errDesc: m.gpuConflictMsg || 'Card đồ họa hoặc trình điều khiển bị lỗi, trình duyệt phải dựng hình thủ công.',
   });
 
   // Item CPU
   updateConflictItem('chkCpuBadge', 'chkCpuDesc', m.cpuConflict, {
     okBadge: '<i class="fa-solid fa-check"></i> Phản hồi nhanh',
-    errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> CPU quá tải',
-    okDesc: `Độ trễ Main Thread thấp (${m.eventLoopLag.toFixed(1)} ms), không bị các ứng dụng ngầm làm nghẽn luồng.`,
-    errDesc: m.cpuConflictMsg || 'CPU đang bị các tiến trình ngầm của máy chiếm dụng (>85%)!',
+    errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> CPU bận',
+    okDesc: `Máy tính phản hồi tức thì (${m.eventLoopLag.toFixed(1)} ms), không bị các phần mềm ngầm làm đơ máy.`,
+    errDesc: m.cpuConflictMsg || 'Máy tính đang bị quá tải bởi các ứng dụng ngầm khác (>85%)!',
   });
 
   // Item RAM
   updateConflictItem('chkRamBadge', 'chkRamDesc', m.ramConflict, {
     okBadge: '<i class="fa-solid fa-check"></i> Bộ nhớ an toàn',
-    errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Áp lực bộ nhớ',
-    okDesc: `Dung lượng RAM heap an toàn (${m.usedHeapMb} MB / ${m.limitHeapMb} MB), đủ để phân tích video liên tục.`,
-    errDesc: m.ramConflictMsg || 'RAM trình duyệt sắp đầy (>80%), nguy cơ quá tải khi phân tích video dài!',
+    errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Sắp đầy bộ nhớ',
+    okDesc: `Dung lượng RAM trống dồi dào (${m.usedHeapMb} MB / ${m.limitHeapMb} MB), đủ để tải và xem video liên tục.`,
+    errDesc: m.ramConflictMsg || 'Bộ nhớ RAM trình duyệt sắp đầy (>80%), nên đóng bớt tab trước khi phân tích!',
   });
 
   // Item Mạng
   updateConflictItem('chkNetBadge', 'chkNetDesc', m.netConflict, {
     okBadge: '<i class="fa-solid fa-check"></i> Thông suốt',
-    errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Xung đột mạng',
-    okDesc: 'Đường truyền tới Google Gemini API ổn định, không bị Tường lửa hoặc VPN chặn.',
-    errDesc: m.netConflictMsg || 'Không thể kết nối API Google: Tường lửa, Proxy hoặc VPN đang chặn đường truyền.',
+    errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Mạng gián đoạn',
+    okDesc: `Tốc độ mạng ${m.netDownlink.toFixed(1)} Mbps (Ping ${m.netRtt}ms), kết nối tới máy chủ Google AI rất ổn định.`,
+    errDesc: m.netConflictMsg || 'Không thể kết nối API Google: Mạng bị mất kết nối hoặc bị tường lửa/VPN chặn.',
+  });
+
+  // Item Ổ cứng SSD/HDD
+  updateConflictItem('chkDiskBadge', 'chkDiskDesc', false, {
+    okBadge: '<i class="fa-solid fa-check"></i> Ổ cứng mượt',
+    errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Ổ cứng bận',
+    okDesc: `Tốc độ đọc ổ đĩa ~${m.ioReadSpeedMb} MB/s, mở video lên ngay tức thì mà không phải chờ đợi.`,
+    errDesc: 'Ổ cứng đang bận đọc ghi tác vụ khác, thời gian mở video có thể hơi chậm!',
   });
 
   // Main Banner
   const conflicts = [];
   if (m.cameraConflict) conflicts.push('Camera');
-  if (m.gpuConflict) conflicts.push('GPU');
+  if (m.gpuConflict) conflicts.push('Card đồ họa (GPU)');
   if (m.cpuConflict) conflicts.push('CPU');
   if (m.ramConflict) conflicts.push('Bộ nhớ RAM');
   if (m.netConflict) conflicts.push('Kết nối Mạng');
@@ -1588,17 +1801,17 @@ function updateConflictChecklist() {
       banner.className = 'conflict-banner err';
       banner.querySelector('.conflict-banner-icon').innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
       title.textContent = `Phát hiện xung đột ở ${conflicts.length} thành phần: ${conflicts.join(', ')}`;
-      desc.textContent = 'Một số phần mềm khác hoặc cài đặt trên máy đang gây xung đột. Xem chi tiết các mục bên dưới để khắc phục.';
+      desc.textContent = 'Một số ứng dụng khác trên máy đang chiếm giữ thiết bị. Hãy kiểm tra các mục có màu đỏ bên dưới để khắc phục.';
     } else if (m.cpuPercent >= 75 || m.heapPercent >= 65) {
       banner.className = 'conflict-banner warn';
       banner.querySelector('.conflict-banner-icon').innerHTML = '<i class="fa-solid fa-circle-exclamation"></i>';
-      title.textContent = 'Hệ thống đang hoạt động dưới tải trọng cao';
-      desc.textContent = 'Máy tính đang chạy nhiều ứng dụng đồng thời. Tốc độ nhận diện có thể chậm hơn bình thường.';
+      title.textContent = 'Máy tính đang chạy nhiều tác vụ cùng lúc';
+      desc.textContent = 'Tải CPU hoặc RAM đang hơi cao. Ứng dụng vẫn hoạt động nhưng tốc độ nhận diện có thể chậm hơn một chút.';
     } else {
       banner.className = 'conflict-banner ok';
       banner.querySelector('.conflict-banner-icon').innerHTML = '<i class="fa-solid fa-circle-check"></i>';
-      title.textContent = 'Hệ thống đang hoạt động tối ưu — Không phát hiện xung đột';
-      desc.textContent = 'Camera, GPU, CPU, RAM và kết nối API đều sẵn sàng xử lý video và nhận diện thời gian thực mượt mà.';
+      title.textContent = 'Máy tính sẵn sàng — Không phát hiện xung đột nào';
+      desc.textContent = 'Camera, Card màn hình, CPU, RAM, Ổ cứng và Mạng đều đang ở trạng thái tốt nhất để chạy ứng dụng.';
     }
   }
 }
