@@ -1990,14 +1990,17 @@ function updateMonitorUI() {
   if (netRttEl) netRttEl.textContent = m.netRtt + ' ms';
   const netStatusEl = $('netStatusText');
   if (netStatusEl) {
-    if (!navigator.onLine || netDownlink < 1.5) {
-      netStatusEl.textContent = 'Mạng yếu hoặc mất mạng';
+    if (!navigator.onLine) {
+      netStatusEl.textContent = 'Mất kết nối';
+      netStatusEl.className = 'text-danger';
+    } else if (netDownlink < 1.5) {
+      netStatusEl.textContent = 'Mạng rất yếu';
       netStatusEl.className = 'text-danger';
     } else if (netDownlink < 8) {
       netStatusEl.textContent = 'Tốc độ trung bình';
       netStatusEl.className = 'text-warn';
     } else {
-      netStatusEl.textContent = 'Đường truyền rất tốt';
+      netStatusEl.textContent = 'Đường truyền tốt';
       netStatusEl.className = 'text-success';
     }
   }
