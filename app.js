@@ -1571,6 +1571,8 @@ const monitorState = {
   cpuConflictMsg: '',
   ramConflict: false,
   ramConflictMsg: '',
+  diskConflict: false,
+  diskConflictMsg: '',
   netConflict: false,
   netConflictMsg: '',
 
@@ -2029,8 +2031,20 @@ function updateMonitorUI() {
   if (diskQuotaEl) diskQuotaEl.textContent = `${diskUsedMb} MB / ${diskQuotaMb >= 1024 ? (diskQuotaMb / 1024).toFixed(1) + ' GB' : diskQuotaMb + ' MB'}`;
   const diskIoEl = $('diskIoStatusText');
   if (diskIoEl) {
-    diskIoEl.textContent = 'Phản hồi tức thì (SSD)';
-    diskIoEl.className = 'text-success';
+    const readSpeed = m.ioReadSpeedMb || 350;
+    if (m.diskConflict || readSpeed < 100) {
+      diskIoEl.textContent = 'Nghẽn đọc ghi (I/O Wait)';
+      diskIoEl.className = 'text-danger';
+    } else if (readSpeed < 250) {
+      diskIoEl.textContent = 'Tốc độ trung bình (SATA/HDD)';
+      diskIoEl.className = 'text-warn';
+    } else if (readSpeed >= 500) {
+      diskIoEl.textContent = 'Đọc luồng cao (NVMe Burst)';
+      diskIoEl.className = 'text-success';
+    } else {
+      diskIoEl.textContent = 'Phản hồi tức thì (SSD)';
+      diskIoEl.className = 'text-success';
+    }
   }
 
   // 6. Header live status widget
@@ -2120,11 +2134,11 @@ function updateConflictChecklist() {
   });
 
   // Item Ổ cứng SSD/HDD
-  updateConflictItem('chkDiskBadge', 'chkDiskDesc', false, {
+  updateConflictItem('chkDiskBadge', 'chkDiskDesc', Boolean(m.diskConflict), {
     okBadge: '<i class="fa-solid fa-check"></i> Ổ cứng mượt',
     errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Ổ cứng bận',
     okDesc: `Tốc độ đọc ổ đĩa ~${m.ioReadSpeedMb} MB/s, mở video lên ngay tức thì mà không phải chờ đợi.`,
-    errDesc: 'Ổ cứng đang bận đọc ghi tác vụ khác, thời gian mở video có thể hơi chậm!',
+    errDesc: m.diskConflictMsg || 'Ổ cứng đang bận đọc ghi tác vụ khác (I/O Wait), thời gian mở video có thể hơi chậm!',
   });
 
   // Main Banner
@@ -2133,6 +2147,7 @@ function updateConflictChecklist() {
   if (m.gpuConflict) conflicts.push('Card đồ họa (GPU)');
   if (m.cpuConflict) conflicts.push('CPU');
   if (m.ramConflict) conflicts.push('Bộ nhớ RAM');
+  if (m.diskConflict) conflicts.push('Ổ cứng máy tính');
   if (m.netConflict) conflicts.push('Kết nối Mạng');
 
   const banner = $('conflictMainBanner');
