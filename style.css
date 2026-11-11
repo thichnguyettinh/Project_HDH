@@ -1,4 +1,12 @@
 /* Màu lấy từ logo: Khoa CNTT (#00668F, #FDB813), HCMUE (#0C4874, #D1373E) */
+
+/* Đăng ký CSS custom property để --gauge-deg có thể transition mượt mà */
+@property --gauge-deg {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
 :root {
   --primary: #00668F;
   --primary-hover: #005577;
@@ -11,7 +19,11 @@
   --gold-text: #8A5A00;
   --danger: #D1373E;
   --danger-soft: #FCEBEC;
+  --warning: #D97706;
+  --warning-soft: #FEF3C7;
   --success: #2E8B57;
+  --success-soft: #E8F5E9;
+  --navy-soft: #E6EDF2;
 
   --text: #1B1C1C;
   --text-secondary: #5B6470;
@@ -196,33 +208,9 @@ a { color: var(--primary); text-decoration: none; }
 .menu-item.active i { opacity: 1; }
 .sidebar-backdrop { display: none; }
 
-.sidebar-sys-card {
-  margin-top: auto;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(255, 255, 255, .1);
-  border-radius: 8px;
-}
-.sidebar-sys-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .4px;
-  color: rgba(255, 255, 255, .6);
-  margin-bottom: 4px;
-}
-.sidebar-sys-info {
-  font-size: 12px;
-  font-weight: 600;
-  color: #fff;
-}
-
 .sidebar-foot {
-  padding: 10px 4px 2px;
+  margin-top: auto;
+  padding: 12px 4px 2px;
   border-top: 1px solid rgba(255, 255, 255, .12);
   display: flex;
   flex-direction: column;
@@ -294,6 +282,7 @@ a { color: var(--primary); text-decoration: none; }
   font-size: 17px;
   font-weight: 700;
   color: var(--heading);
+  white-space: nowrap;
 }
 .card-tools { display: flex; gap: 8px; }
 
@@ -634,8 +623,8 @@ mark { background: #FFE58A; padding: 0 2px; border-radius: 2px; }
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
-  height: 160px;
-  padding: 12px 6px 4px;
+  height: 130px;
+  padding: 8px 6px 4px;
   align-items: end;
   background: var(--bg-subtle);
   border-radius: var(--radius-input);
@@ -738,8 +727,109 @@ mark { background: #FFE58A; padding: 0 2px; border-radius: 2px; }
   flex-direction: column;
 }
 .card-video-chart .nature-bars-grid {
-  height: 160px;
-  margin-top: auto;
+  height: 130px;
+  min-height: 130px;
+  max-height: 130px;
+  flex: none;
+  margin-top: 10px;
+}
+
+/* Box Đánh giá an ninh chốt mức cao nhất (Security Assessment Box) */
+.security-assessment-box {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-input);
+  background: #fff;
+  border: 1px solid var(--border-table);
+  border-left: 4px solid var(--primary);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 3px rgba(12, 42, 68, .04);
+}
+.security-assessment-box.danger {
+  background: #FFF5F5;
+  border-color: #FED7D7;
+  border-left: 4px solid var(--danger);
+}
+.security-assessment-box.warning {
+  background: #FFFBEB;
+  border-color: #FDE68A;
+  border-left: 4px solid #D97706;
+}
+.security-assessment-box.success {
+  background: #F0FDF4;
+  border-color: #BBF7D0;
+  border-left: 4px solid var(--success);
+}
+.security-assessment-box.normal {
+  background: #F7FAFC;
+  border-color: var(--border-table);
+  border-left: 4px solid var(--primary);
+}
+.security-assessment-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.security-assessment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+.security-assessment-badge.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid #F0B4B7;
+}
+.security-assessment-badge.warning {
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FDE68A;
+}
+.security-assessment-badge.success {
+  background: #DCFCE7;
+  color: #15803D;
+  border: 1px solid #BBF7D0;
+}
+.security-assessment-badge.normal {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid var(--primary-border-soft);
+}
+.security-assessment-summary {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.security-assessment-alerts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.security-alert-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.security-alert-pill.danger {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+.security-alert-pill.warning {
+  background: #FEF3C7;
+  color: #92400E;
 }
 .chart-empty-box {
   display: flex;
@@ -888,6 +978,16 @@ mark { background: #FFE58A; padding: 0 2px; border-radius: 2px; }
 }
 
 /* Khung hình capture mới nhất */
+.cam-latest-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cam-latest-label i { color: var(--primary); }
 .cam-latest-card {
   display: flex;
   gap: 16px;
@@ -1306,13 +1406,22 @@ mark { background: #FFE58A; padding: 0 2px; border-radius: 2px; }
   font-weight: 600;
 }
 
-/* Thẻ Mini Monitor trong trang Camera */
+/* Thẻ Mini Monitor tách riêng phía trên khối thống kê */
 .card-mini-monitor {
-  padding: 14px 16px;
-  margin-top: 14px;
+  flex: none !important;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(12, 42, 68, .04);
 }
 .card-mini-monitor .card-head {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+}
+.card-mini-monitor .card-head h2 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+  white-space: nowrap;
 }
 .badge-status-ok {
   display: inline-flex;
@@ -1356,6 +1465,10 @@ mark { background: #FFE58A; padding: 0 2px; border-radius: 2px; }
   gap: 8px;
   margin-bottom: 10px;
 }
+.mini-metrics-grid.mini-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 0;
+}
 .mini-metric-item {
   background: var(--bg-subtle);
   border: 1px solid var(--border-table);
@@ -1389,6 +1502,10 @@ mark { background: #FFE58A; padding: 0 2px; border-radius: 2px; }
 .mini-bar-fill.success { background: var(--success); }
 .mini-bar-fill.warn { background: var(--warning); }
 .mini-bar-fill.danger { background: var(--danger); }
+.mini-bar-fill.gpu { background: #059669; }
+.mini-bar-fill.ram { background: #0C4874; }
+.mini-bar-fill.net { background: #0284C7; }
+.mini-bar-fill.disk { background: #8B5CF6; }
 .conflict-inline-alert {
   padding: 8px 12px;
   border-radius: 6px;
@@ -1561,37 +1678,40 @@ mark { background: #FFE58A; padding: 0 2px; border-radius: 2px; }
 }
 .card-monitor-stat .card-head {
   min-height: 42px;
+  gap: 8px;
+  align-items: center;
 }
 .card-monitor-stat .card-head h2 {
-  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
   line-height: 1.3;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
+  white-space: normal;
+  overflow: visible;
+  flex: 1;
+  min-width: 0;
 }
 .card-monitor-stat .card-subtitle {
   font-size: 11.5px;
   color: var(--text-secondary);
   margin-top: -6px;
   margin-bottom: 8px;
-  line-height: 1.35;
+  line-height: 1.4;
   font-weight: 400;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
 }
 .card-monitor-stat .badge-tag {
   flex-shrink: 0;
   white-space: nowrap;
+  font-size: 11px;
+  padding: 3px 8px;
 }
 .card-monitor-gpu .card-head {
-  gap: 6px;
+  gap: 8px;
 }
 .card-monitor-gpu .badge-tag {
-  max-width: 42%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: none;
+  overflow: visible;
 }
 .card-monitor-stat .metric-details-list {
   margin-top: 0;
@@ -1665,7 +1785,7 @@ mark { background: #FFE58A; padding: 0 2px; border-radius: 2px; }
   align-items: center;
   justify-content: center;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, .06);
-  transition: background .4s ease;
+  transition: --gauge-deg .5s ease;
 }
 .gauge-circle.warn {
   background: conic-gradient(var(--warning) 0deg, var(--warning) calc(var(--gauge-deg, 0deg)), #E9ECEF calc(var(--gauge-deg, 0deg)), #E9ECEF 360deg);
@@ -1750,6 +1870,10 @@ mark { background: #FFE58A; padding: 0 2px; border-radius: 2px; }
 .metric-progress-fill.success { background: var(--success); }
 .metric-progress-fill.warn { background: var(--warning); }
 .metric-progress-fill.danger { background: var(--danger); }
+.metric-progress-fill.gpu { background: #059669; }
+.metric-progress-fill.ram { background: #0C4874; }
+.metric-progress-fill.net { background: #0284C7; }
+.metric-progress-fill.disk { background: #8B5CF6; }
 .metric-details-list {
   display: flex;
   flex-direction: column;

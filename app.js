@@ -19,6 +19,7 @@ const state = {
 
   videoFile: null,
   videoQueue: [],     // Hàng đợi video (SJF Queue)
+  videoAnalyzing: false, // Trạng thái đang gọi API phân tích video
   videoResult: null,
   rows: [],           // mỗi dòng = 1 hành vi của 1 người
   activeAction: '',   // pill đang chọn
@@ -313,7 +314,7 @@ function renderQueueUI() {
   }
 
   queueCard.classList.remove('hidden');
-  if (countTag) countTag.textContent = `${state.videoQueue.length} video (Tự động ưu tiên)`;
+  if (countTag) countTag.textContent = `${state.videoQueue.length} video`;
 
   queueList.innerHTML = state.videoQueue.map((f, idx) => {
     const mb = (f.size / 1024 / 1024).toFixed(1);
@@ -376,7 +377,7 @@ function clearVideoResult() {
   state.activeAction = '';
   state.filterNature = '';
   if ($('filterNature')) $('filterNature').value = '';
-  $('summary').classList.add('hidden');
+  if ($('summary')) $('summary').classList.add('hidden');
   const chartCard = $('natureChartCard');
   if (chartCard) chartCard.classList.add('hidden');
   const chartEmpty = $('natureChartEmpty');
@@ -391,10 +392,13 @@ function clearVideoResult() {
 async function analyzeVideo() {
   if (!state.videoFile) return;
   $('btnAnalyze').disabled = true;
+  state.videoAnalyzing = true;
+  if (typeof tickSystemMetrics === 'function') tickSystemMetrics(); // Cập nhật ngay lập tức giám sát hệ thống
   setStatus('videoStatus', 'AI đang xem video và nhận diện hành vi (khoảng 15–45 giây)...', 'loading');
 
   try {
     const base64 = await fileToBase64(state.videoFile);
+    if (typeof tickSystemMetrics === 'function') tickSystemMetrics();
     const text = await callGemini([
       { inlineData: { mimeType: state.videoFile.type || 'video/mp4', data: base64 } },
       { text: VIDEO_PROMPT },
@@ -405,7 +409,9 @@ async function analyzeVideo() {
   } catch (err) {
     setStatus('videoStatus', err.message, 'error');
   } finally {
+    state.videoAnalyzing = false;
     $('btnAnalyze').disabled = false;
+    if (typeof tickSystemMetrics === 'function') tickSystemMetrics(); // Cập nhật ngay để hạ tải
   }
 }
 
@@ -431,8 +437,10 @@ function applyVideoResult(result) {
   $('filterText').value = '';
 
   const summary = $('summary');
-  summary.textContent = state.videoResult.summary;
-  summary.classList.toggle('hidden', !state.videoResult.summary);
+  if (summary) {
+    summary.textContent = state.videoResult.summary;
+    summary.classList.toggle('hidden', !state.videoResult.summary);
+  }
   $('btnDownload').disabled = false;
   renderNatureChart();
   renderActionPills();
@@ -526,6 +534,63 @@ function renderNatureChart() {
       renderResultTable();
     });
   });
+
+  // Box Đánh giá an ninh chốt mức cao nhất (Highest Threat Priority)
+  // Quy tắc an ninh: Dù chỉ có 1 hành vi nguy hiểm/bất thường, vẫn ưu tiên cảnh báo mức cao nhất!
+  let peakLevel = 'Bình thường';
+  let badgeIcon = 'fa-circle-check';
+  let badgeText = 'Trạng thái: Bình thường (Không có rủi ro)';
+  let boxClass = 'normal';
+
+  if (counts['Nguy hiểm'] > 0) {
+    peakLevel = 'Nguy hiểm';
+    badgeIcon = 'fa-triangle-exclamation';
+    badgeText = `Mức cao nhất: Nguy hiểm (${counts['Nguy hiểm']} hành vi rủi ro)`;
+    boxClass = 'danger';
+  } else if (counts['Bất thường'] > 0) {
+    peakLevel = 'Bất thường';
+    badgeIcon = 'fa-circle-exclamation';
+    badgeText = `Mức cao nhất: Bất thường (${counts['Bất thường']} hành vi cần chú ý)`;
+    boxClass = 'warning';
+  } else if (counts['An toàn'] > 0) {
+    peakLevel = 'An toàn';
+    badgeIcon = 'fa-shield-halved';
+    badgeText = `Mức cao nhất: An toàn (${counts['An toàn']} hành vi bảo hộ/hỗ trợ)`;
+    boxClass = 'success';
+  }
+
+  const assessBox = $('securityAssessmentBox');
+  const assessBadge = $('assessmentBadge');
+  const assessCount = $('assessmentEventCount');
+  const assessSummary = $('assessmentSummary');
+  const assessAlerts = $('assessmentAlerts');
+
+  if (assessBox) {
+    assessBox.className = 'security-assessment-box ' + boxClass;
+    if (assessBadge) {
+      assessBadge.className = 'security-assessment-badge ' + boxClass;
+      assessBadge.innerHTML = `<i class="fa-solid ${badgeIcon}"></i> ${escapeHtml(badgeText)}`;
+    }
+    if (assessCount) {
+      assessCount.textContent = `${total} hành vi ghi nhận`;
+    }
+    if (assessSummary) {
+      assessSummary.textContent = state.videoResult?.summary || 'Đã phân tích toàn bộ khung thời gian của video.';
+    }
+    if (assessAlerts) {
+      const alertEvents = state.rows.filter((r) => r.nature === 'Nguy hiểm' || r.nature === 'Bất thường');
+      if (alertEvents.length > 0) {
+        assessAlerts.innerHTML = alertEvents.slice(0, 5).map((r) => `
+          <span class="security-alert-pill ${r.nature === 'Nguy hiểm' ? 'danger' : 'warning'}" data-tooltip="${escapeHtml(r.detail || r.action)} lúc ${fmtTime(r.start)}">
+            <i class="fa-solid ${r.nature === 'Nguy hiểm' ? 'fa-triangle-exclamation' : 'fa-circle-exclamation'}"></i>
+            ${escapeHtml(r.action)} (${fmtTime(r.start)})
+          </span>
+        `).join('');
+      } else {
+        assessAlerts.innerHTML = `<span class="text-xs text-muted"><i class="fa-solid fa-check"></i> Không phát hiện hành vi đe dọa an ninh nào.</span>`;
+      }
+    }
+  }
 }
 
 function renderActionPills() {
@@ -633,27 +698,144 @@ const FRAME_SCHEMA = {
       items: {
         type: 'OBJECT',
         properties: {
-          appearance: { type: 'STRING', description: 'Trang phục, đặc điểm' },
-          action: { type: 'STRING', description: 'Hành vi đang làm, ngắn gọn' },
+          appearance: { type: 'STRING', description: 'Trang phục, đặc điểm nhận dạng' },
+          action: {
+            type: 'STRING',
+            description: 'Hành động cụ thể (chọn chính xác từ: "Đi bộ", "Chạy", "Đứng", "Ngồi", "Cúi người/Nằm", "Dùng điện thoại", "Cầm nắm đồ vật", "Mang vác/Kéo lê", "Bỏ lại đồ vật", "Đột nhập/Leo trèo", "Xô xát/Ẩu đả", "Té ngã", "Phá hoại")',
+          },
+          nature: {
+            type: 'STRING',
+            description: 'Tính chất hành vi an ninh: "Bình thường", "An toàn", "Bất thường", hoặc "Nguy hiểm"',
+          },
         },
-        required: ['appearance', 'action'],
+        required: ['appearance', 'action', 'nature'],
       },
     },
   },
   required: ['scene', 'persons'],
 };
 
-const FRAME_PROMPT = `Đây là một khung hình chụp từ camera. Liệt kê những người có trong ảnh: trang phục/đặc điểm và hành vi đang làm (1 cụm động từ ngắn).
+const FRAME_PROMPT = `Đây là một khung hình chụp từ camera an ninh. Liệt kê những người có trong ảnh, với mỗi người:
+- appearance: Trang phục, đặc điểm nhận dạng (giới tính ước đoán, màu áo, phụ kiện).
+- action: HÀNH ĐỘNG CỤ THỂ, BẮT BUỘC chọn 1 trong các nhãn chuẩn sau:
+    [Vận động cơ bản]: "Đi bộ", "Chạy", "Đứng", "Ngồi", "Cúi người/Nằm"
+    [Tương tác vật thể]: "Dùng điện thoại", "Cầm nắm đồ vật", "Mang vác/Kéo lê", "Bỏ lại đồ vật"
+    [An ninh & Sự cố]: "Đột nhập/Leo trèo", "Xô xát/Ẩu đả", "Té ngã", "Phá hoại"
+- nature: TÍNH CHẤT HÀNH VI AN NINH, phân loại chính xác thành 1 trong 4 nhóm:
+    * "Nguy hiểm": Hành vi gây rủi ro tức thì (Xô xát/Ẩu đả, Té ngã bất tỉnh, Phá hoại tài sản, Đột nhập/Leo trèo).
+    * "Bất thường": Hành vi khả nghi cần theo dõi (Bỏ lại đồ vật, chạy trốn vội vã, lảng vảng ngó nghiêng lén lút).
+    * "An toàn": Tuân thủ quy định và bảo vệ an toàn (Đội mũ bảo hiểm, mặc đồ bảo hộ, hỗ trợ người khác).
+    * "Bình thường": Sinh hoạt và làm việc chuẩn (Đi bộ, Đứng, Ngồi, Dùng điện thoại thông thường).
 Không có người thì để persons rỗng. Viết bằng tiếng Việt.`;
 
 function initCameraPage() {
   $('btnCamStart').addEventListener('click', startCamera);
   $('btnCamStop').addEventListener('click', stopCamera);
   $('camFilter').addEventListener('input', renderCamLog);
-  $('btnCamClear').addEventListener('click', () => { state.cameraLog = []; renderCamLog(); renderChatContext(); });
+  $('btnCamClear').addEventListener('click', () => {
+    state.cameraLog = [];
+    renderCamLog();
+    renderCamNatureChart();
+    renderChatContext();
+    updateCamDownloadBtn();
+  });
   $('camInterval').addEventListener('change', () => {
     if (state.cameraTimer) { clearInterval(state.cameraTimer); scheduleCapture(); }
   });
+  const btnCamDownload = $('btnCamDownload');
+  if (btnCamDownload) btnCamDownload.addEventListener('click', downloadCamJson);
+  const btnCamDownloadTable = $('btnCamDownloadTable');
+  if (btnCamDownloadTable) btnCamDownloadTable.addEventListener('click', downloadCamJson);
+
+  const btnCamImport = $('btnCamImport');
+  if (btnCamImport) btnCamImport.addEventListener('click', () => $('camImportInput').click());
+  const btnCamImportTable = $('btnCamImportTable');
+  if (btnCamImportTable) btnCamImportTable.addEventListener('click', () => $('camImportInput').click());
+  const camEmptyImportLink = $('camEmptyImportLink');
+  if (camEmptyImportLink) camEmptyImportLink.addEventListener('click', () => $('camImportInput').click());
+
+  $('camImportInput').addEventListener('change', () => {
+    if ($('camImportInput').files[0]) importCamJson($('camImportInput').files[0]);
+    $('camImportInput').value = '';
+  });
+}
+
+function updateCamDownloadBtn() {
+  const hasData = Boolean(state.cameraLog && state.cameraLog.length > 0);
+  const btn = $('btnCamDownload');
+  if (btn) btn.disabled = !hasData;
+  const btnTable = $('btnCamDownloadTable');
+  if (btnTable) btnTable.disabled = !hasData;
+}
+
+function downloadCamJson() {
+  if (!state.cameraLog.length) return;
+  const data = {
+    source: 'Realtime Camera Log',
+    exportedAt: new Date().toISOString(),
+    totalSnapshots: state.cameraLog.length,
+    cameraLog: state.cameraLog,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const dateStr = new Date().toISOString().slice(0, 10);
+  a.download = `nhat-ky-camera-${dateStr}.json`;
+  a.click();
+}
+
+async function importCamJson(file) {
+  try {
+    const raw = JSON.parse(await file.text());
+    let importedLog = [];
+    if (Array.isArray(raw)) {
+      importedLog = raw;
+    } else if (Array.isArray(raw.cameraLog)) {
+      importedLog = raw.cameraLog;
+    } else if (Array.isArray(raw.persons)) {
+      importedLog = [{
+        id: 'cam_' + Date.now(),
+        time: new Date().toLocaleTimeString('vi-VN'),
+        scene: raw.summary || 'Dữ liệu nhập từ file phân tích',
+        persons: raw.persons.flatMap((p) => (p.behaviors || []).map((b) => ({
+          appearance: p.appearance || p.person || 'Người',
+          action: b.action || b.behavior || 'Không rõ',
+          nature: normalizeNature(b.nature) || 'Bình thường'
+        }))),
+        snapshot: null
+      }];
+    } else {
+      throw new Error();
+    }
+
+    if (!importedLog.length) {
+      setStatus('camStatus', 'File JSON không có bản ghi nào.', 'error');
+      return;
+    }
+
+    state.cameraLog = importedLog.map((e, idx) => ({
+      id: e.id || ('cam_imp_' + Date.now() + '_' + idx),
+      time: e.time || new Date().toLocaleTimeString('vi-VN'),
+      scene: e.scene || '',
+      persons: (e.persons || []).map((p) => ({
+        appearance: p.appearance || 'Người',
+        action: p.action || p.behavior || 'Không rõ',
+        nature: normalizeNature(p.nature) || inferNature(p.action, '') || 'Bình thường'
+      })),
+      snapshot: e.snapshot || null
+    }));
+
+    if (state.cameraLog.length > 0) {
+      renderCamLatest(state.cameraLog[0]);
+    }
+    renderCamLog();
+    renderCamNatureChart();
+    renderChatContext();
+    updateCamDownloadBtn();
+    setStatus('camStatus', `Đã nhập ${state.cameraLog.length} bản ghi từ ${file.name}.`, 'ok');
+  } catch (_) {
+    setStatus('camStatus', 'File JSON không đúng định dạng nhật ký camera.', 'error');
+  }
 }
 
 async function startCamera() {
@@ -725,6 +907,7 @@ async function captureAndAnalyze() {
   const base64 = dataUrl.split(',')[1];
 
   state.cameraBusy = true;
+  if (typeof tickSystemMetrics === 'function') tickSystemMetrics();
   setStatus('camStatus', 'Đang nhận diện', 'loading');
   try {
     const result = parseJson(await callGemini([
@@ -736,19 +919,26 @@ async function captureAndAnalyze() {
       id: 'cam_' + Date.now(),
       time: new Date().toLocaleTimeString('vi-VN'),
       scene: result.scene || '',
-      persons: result.persons || [],
+      persons: (result.persons || []).map((p) => ({
+        appearance: p.appearance,
+        action: p.action,
+        nature: normalizeNature(p.nature) || inferNature(p.action, '') || 'Bình thường',
+      })),
       snapshot: dataUrl,
     };
     state.cameraLog.unshift(entry);
     if (state.cameraLog.length > MAX_CAM_LOG) state.cameraLog.pop();
     renderCamLatest(entry);
     renderCamLog();
+    renderCamNatureChart();
     renderChatContext();
+    updateCamDownloadBtn();
     setStatus('camStatus', 'Cập nhật lúc ' + entry.time, 'ok');
   } catch (err) {
     setStatus('camStatus', err.message, 'error');
   } finally {
     state.cameraBusy = false;
+    if (typeof tickSystemMetrics === 'function') tickSystemMetrics();
   }
 }
 
@@ -789,6 +979,7 @@ function renderCamLog() {
           time: e.time,
           appearance: '<span class="text-muted">(Không có người)</span>',
           action: e.scene || 'Không phát hiện',
+          nature: '',
           snapshot: e.snapshot,
           scene: e.scene,
           isRawText: true,
@@ -801,6 +992,7 @@ function renderCamLog() {
             time: e.time,
             appearance: p.appearance,
             action: p.action,
+            nature: p.nature || inferNature(p.action, '') || 'Bình thường',
             snapshot: e.snapshot,
             scene: e.scene,
           });
@@ -811,9 +1003,14 @@ function renderCamLog() {
 
   const tbody = $('camLogBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr class="empty"><td colspan="4"><i class="fa-regular fa-folder-open"></i>Không có dữ liệu</td></tr>';
+    tbody.innerHTML = '<tr class="empty"><td colspan="5"><i class="fa-regular fa-folder-open"></i>Không có dữ liệu</td></tr>';
   } else {
-    tbody.innerHTML = rows.map((r, i) => `
+    tbody.innerHTML = rows.map((r, i) => {
+      const meta = r.nature ? (NATURE_META[r.nature] || NATURE_META['Bình thường']) : null;
+      const natureCellHtml = meta
+        ? `<span class="nature-tag ${meta.badgeClass}" data-tooltip="${meta.tooltip}"><i class="fa-solid ${meta.icon}"></i> ${escapeHtml(r.nature)}</span>`
+        : '<span class="text-muted">—</span>';
+      return `
       <tr>
         <td class="time">${r.time}</td>
         <td style="text-align: center;">
@@ -825,8 +1022,10 @@ function renderCamLog() {
         </td>
         <td>${r.isRawText ? r.appearance : highlight(r.appearance, q)}</td>
         <td><span class="tag">${highlight(r.action, q)}</span></td>
+        <td>${natureCellHtml}</td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
 
     tbody.querySelectorAll('.cam-thumb-wrap').forEach((wrap) => {
       wrap.addEventListener('click', () => {
@@ -836,6 +1035,119 @@ function renderCamLog() {
         }
       });
     });
+  }
+}
+
+function renderCamNatureChart() {
+  const card = $('camNatureChartCard');
+  const empty = $('camNatureChartEmpty');
+  if (!card) return;
+
+  // Gộp tất cả persons trong cameraLog để đếm nature
+  const allPersons = state.cameraLog.flatMap((e) => e.persons || []);
+  if (!allPersons.length) {
+    card.classList.add('hidden');
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+  card.classList.remove('hidden');
+  if (empty) empty.classList.add('hidden');
+
+  const counts = { 'Nguy hiểm': 0, 'Bất thường': 0, 'An toàn': 0, 'Bình thường': 0 };
+  allPersons.forEach((p) => {
+    const nat = p.nature || inferNature(p.action, '') || 'Bình thường';
+    counts[nat] = (counts[nat] || 0) + 1;
+  });
+
+  const total = allPersons.length;
+  const maxCount = Math.max(1, ...Object.values(counts));
+  const order = ['Nguy hiểm', 'Bất thường', 'An toàn', 'Bình thường'];
+
+  // Badges tóm tắt
+  const badgesHtml = order.map((key) => {
+    const meta = NATURE_META[key] || NATURE_META['Bình thường'];
+    const cnt = counts[key];
+    if (cnt === 0) return '';
+    return `<span class="nature-summary-badge ${meta.badgeClass}" data-tooltip="${meta.label}: ${cnt} lần (${Math.round((cnt / total) * 100)}%)">
+      <i class="fa-solid ${meta.icon}"></i> ${cnt} ${meta.label}
+    </span>`;
+  }).filter(Boolean).join('');
+  $('camNatureSummaryBadges').innerHTML = badgesHtml;
+
+  // Cột biểu đồ
+  const barsHtml = order.map((key) => {
+    const meta = NATURE_META[key] || NATURE_META['Bình thường'];
+    const cnt = counts[key];
+    const pct = total ? Math.round((cnt / total) * 100) : 0;
+    const heightPct = total ? Math.round((cnt / maxCount) * 100) : 0;
+    return `
+      <div class="nature-bar-col ${meta.badgeClass}" data-tooltip="${escapeHtml(meta.label)}: ${cnt} lần (${pct}%)">
+        <div class="nature-bar-info">
+          <div class="nature-bar-count">${cnt}</div>
+          <div class="nature-bar-pct">${pct}%</div>
+        </div>
+        <div class="nature-bar-track">
+          <div class="nature-bar-fill" style="height: ${cnt > 0 ? Math.max(heightPct, 8) : 0}%"></div>
+        </div>
+        <div class="nature-bar-label">
+          <i class="fa-solid ${meta.icon}"></i>
+          <span>${escapeHtml(key)}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+  $('camNatureChartBars').innerHTML = barsHtml;
+
+  // Box Đánh giá an ninh realtime chốt mức cao nhất cho Camera
+  let camPeakLevel = 'Bình thường';
+  let camBadgeIcon = 'fa-circle-check';
+  let camBadgeText = 'Trạng thái: Bình thường (Ổn định)';
+  let camBoxClass = 'normal';
+
+  if (counts['Nguy hiểm'] > 0) {
+    camPeakLevel = 'Nguy hiểm';
+    camBadgeIcon = 'fa-triangle-exclamation';
+    camBadgeText = `Mức cao nhất: Nguy hiểm (${counts['Nguy hiểm']} lần)`;
+    camBoxClass = 'danger';
+  } else if (counts['Bất thường'] > 0) {
+    camPeakLevel = 'Bất thường';
+    camBadgeIcon = 'fa-circle-exclamation';
+    camBadgeText = `Mức cao nhất: Bất thường (${counts['Bất thường']} lần)`;
+    camBoxClass = 'warning';
+  } else if (counts['An toàn'] > 0) {
+    camPeakLevel = 'An toàn';
+    camBadgeIcon = 'fa-shield-halved';
+    camBadgeText = `Mức cao nhất: An toàn (${counts['An toàn']} lần)`;
+    camBoxClass = 'success';
+  }
+
+  const camBox = $('camSecurityAssessmentBox');
+  const camBadge = $('camAssessmentBadge');
+  const camCount = $('camAssessmentCount');
+  const camAlerts = $('camAssessmentAlerts');
+
+  if (camBox) {
+    camBox.className = 'security-assessment-box ' + camBoxClass;
+    if (camBadge) {
+      camBadge.className = 'security-assessment-badge ' + camBoxClass;
+      camBadge.innerHTML = `<i class="fa-solid ${camBadgeIcon}"></i> ${escapeHtml(camBadgeText)}`;
+    }
+    if (camCount) {
+      camCount.textContent = `${total} lượt phát hiện`;
+    }
+    if (camAlerts) {
+      const dangerPersons = allPersons.filter((p) => p.nature === 'Nguy hiểm' || p.nature === 'Bất thường');
+      if (dangerPersons.length > 0) {
+        camAlerts.innerHTML = dangerPersons.slice(0, 4).map((p) => `
+          <span class="security-alert-pill ${p.nature === 'Nguy hiểm' ? 'danger' : 'warning'}">
+            <i class="fa-solid ${p.nature === 'Nguy hiểm' ? 'fa-triangle-exclamation' : 'fa-circle-exclamation'}"></i>
+            ${escapeHtml(p.action)}
+          </span>
+        `).join('');
+      } else {
+        camAlerts.innerHTML = `<span class="text-xs text-muted"><i class="fa-solid fa-check"></i> Không có hành vi khả nghi trong các khung hình gần nhất.</span>`;
+      }
+    }
   }
 }
 
@@ -1345,23 +1657,30 @@ function tickSystemMetrics() {
   monitorState.fps = currentFps;
 
   // Tính % tải CPU dựa trên độ trễ Event Loop, độ sụt giảm FPS và trạng thái Camera/AI
+  const isVideoAnalyzing = !!state.videoAnalyzing;
+  const isCameraBusy = !!state.cameraBusy;
+  const isAiActive = isVideoAnalyzing || isCameraBusy;
+
   const fpsLoss = Math.max(0, (60 - currentFps) / 60);
   const lagLoss = Math.min(1, eventLoopLag / 120);
   const cameraBoost = (state.cameraStream && !$('camVideo').paused) ? 14 : 0;
-  const aiBoost = (state.cameraBusy || !$('btnAnalyze').disabled) ? 22 : 0;
+  const aiBoost = isVideoAnalyzing ? 42 : (isCameraBusy ? 24 : 0);
   const jitter = (Math.sin(now / 1500) * 3) + (Math.cos(now / 800) * 2);
   const baseCpu = 6 + (fpsLoss * 45) + (lagLoss * 40) + cameraBoost + aiBoost + jitter;
   monitorState.cpuPercent = Math.min(100, Math.max(4, Math.round(baseCpu)));
 
   // Tính % tải GPU ước tính (GPU Load) dựa trên Render Frame Rate và Giải mã Video Camera
   const camActive = (state.cameraStream && !$('camVideo').paused);
-  const isAnalyzing = (state.cameraBusy || !$('btnAnalyze').disabled);
   const gpuJitter = (Math.cos(now / 1300) * 2) + (Math.sin(now / 700) * 1.5);
   let baseGpu = 8 + (fpsLoss * 20) + gpuJitter;
   if (camActive) baseGpu += 22; // Khi bật webcam: GPU giải mã luồng video
-  if (isAnalyzing) baseGpu += 25; // Khi AI đang xử lý: GPU render canvas & bounding box
+  if (isVideoAnalyzing) baseGpu += 34; // Khi AI phân tích video: giải mã và đọc frame
+  else if (isCameraBusy) baseGpu += 20; // Khi AI chụp & xử lý frame camera
   if (!monitorState.gpuAccelerated) baseGpu = 4;
   monitorState.gpuPercent = Math.min(100, Math.max(4, Math.round(baseGpu)));
+
+  // Cập nhật tốc độ I/O ổ đĩa: khi đang nạp file video thì tốc độ đọc tăng vọt
+  monitorState.ioReadSpeedMb = isVideoAnalyzing ? 540 : 350;
 
   // Cập nhật RAM (JS Heap)
   if (performance && performance.memory) {
@@ -1506,6 +1825,15 @@ function formatGpuName(raw) {
 function updateMonitorUI() {
   const m = monitorState;
 
+  // Helper: chỉ cập nhật className khi thực sự thay đổi (tránh reset CSS transition)
+  function setGaugeClass(el, baseClass, extraClass) {
+    const newClass = baseClass + (extraClass ? ' ' + extraClass : '');
+    if (el && el.className !== newClass) el.className = newClass;
+  }
+  function setGaugeDeg(el, deg) {
+    if (el) el.style.setProperty('--gauge-deg', deg + 'deg');
+  }
+
   // 1. Cập nhật CPU
   const cpuPercent = m.cpuPercent;
   const cpuValEl = $('cpuPercentVal');
@@ -1520,14 +1848,10 @@ function updateMonitorUI() {
   if (cpuFpsEl) cpuFpsEl.textContent = m.fps + ' FPS';
 
   const cpuCircle = $('cpuGaugeCircle');
-  if (cpuCircle) {
-    const cpuDeg = Math.round((cpuPercent / 100) * 360);
-    cpuCircle.style.setProperty('--gauge-deg', cpuDeg + 'deg');
-    cpuCircle.className = 'gauge-circle' + (cpuPercent >= 80 ? ' danger' : cpuPercent >= 50 ? ' warn' : '');
-  }
-  if (cpuBarFill) {
-    cpuBarFill.className = 'metric-progress-fill' + (cpuPercent >= 80 ? ' danger' : cpuPercent >= 50 ? ' warn' : '');
-  }
+  const cpuSeverity = cpuPercent >= 80 ? 'danger' : cpuPercent >= 50 ? 'warn' : '';
+  setGaugeDeg(cpuCircle, Math.round((cpuPercent / 100) * 360));
+  setGaugeClass(cpuCircle, 'gauge-circle', cpuSeverity);
+  setGaugeClass(cpuBarFill, 'metric-progress-fill', cpuSeverity);
 
   const cpuStatus = $('cpuStatusText');
   if (cpuStatus) {
@@ -1584,31 +1908,24 @@ function updateMonitorUI() {
     if (m.gpuConflict || m.gpuLost) {
       if (gpuScoreVal) gpuScoreVal.textContent = 'LỖI';
       if (gpuScoreSub) gpuScoreSub.textContent = 'Mất Driver';
-      if (gpuBarFill) {
-        gpuBarFill.style.width = '100%';
-        gpuBarFill.className = 'metric-progress-fill danger';
-      }
-      gpuGaugeCircle.style.setProperty('--gauge-deg', '360deg');
-      gpuGaugeCircle.className = 'gauge-circle gpu-circle danger';
+      if (gpuBarFill) { gpuBarFill.style.width = '100%'; setGaugeClass(gpuBarFill, 'metric-progress-fill', 'danger'); }
+      setGaugeDeg(gpuGaugeCircle, 360);
+      setGaugeClass(gpuGaugeCircle, 'gauge-circle gpu-circle', 'danger');
     } else if (!m.gpuAccelerated) {
       if (gpuScoreVal) gpuScoreVal.textContent = 'YẾU';
       if (gpuScoreSub) gpuScoreSub.textContent = 'Dựng giả lập CPU';
-      if (gpuBarFill) {
-        gpuBarFill.style.width = '30%';
-        gpuBarFill.className = 'metric-progress-fill warn';
-      }
-      gpuGaugeCircle.style.setProperty('--gauge-deg', '108deg');
-      gpuGaugeCircle.className = 'gauge-circle gpu-circle warn';
+      if (gpuBarFill) { gpuBarFill.style.width = '30%'; setGaugeClass(gpuBarFill, 'metric-progress-fill', 'warn'); }
+      setGaugeDeg(gpuGaugeCircle, 108);
+      setGaugeClass(gpuGaugeCircle, 'gauge-circle gpu-circle', 'warn');
     } else {
       if (gpuScoreVal) gpuScoreVal.textContent = gpuPercent + '%';
       if (gpuScoreSub) gpuScoreSub.textContent = 'Tải GPU ước tính';
       if (gpuBarFill) {
         gpuBarFill.style.width = gpuPercent + '%';
-        gpuBarFill.className = 'metric-progress-fill' + (gpuPercent >= 80 ? ' danger' : gpuPercent >= 55 ? ' warn' : ' success');
+        setGaugeClass(gpuBarFill, 'metric-progress-fill', gpuPercent >= 80 ? 'danger' : gpuPercent >= 55 ? 'warn' : 'success');
       }
-      const gpuDeg = Math.round((gpuPercent / 100) * 360);
-      gpuGaugeCircle.style.setProperty('--gauge-deg', gpuDeg + 'deg');
-      gpuGaugeCircle.className = 'gauge-circle gpu-circle' + (gpuPercent >= 80 ? ' danger' : gpuPercent >= 55 ? ' warn' : '');
+      setGaugeDeg(gpuGaugeCircle, Math.round((gpuPercent / 100) * 360));
+      setGaugeClass(gpuGaugeCircle, 'gauge-circle gpu-circle', gpuPercent >= 80 ? 'danger' : gpuPercent >= 55 ? 'warn' : '');
     }
   }
 
@@ -1626,14 +1943,10 @@ function updateMonitorUI() {
   if (ramBarFill) ramBarFill.style.width = ramPercent + '%';
 
   const ramCircle = $('ramGaugeCircle');
-  if (ramCircle) {
-    const ramDeg = Math.round((ramPercent / 100) * 360);
-    ramCircle.style.setProperty('--gauge-deg', ramDeg + 'deg');
-    ramCircle.className = 'gauge-circle ram-circle' + (ramPercent >= 80 ? ' danger' : ramPercent >= 60 ? ' warn' : '');
-  }
-  if (ramBarFill) {
-    ramBarFill.className = 'metric-progress-fill' + (ramPercent >= 80 ? ' danger' : ramPercent >= 60 ? ' warn' : '');
-  }
+  const ramSeverity = ramPercent >= 80 ? 'danger' : ramPercent >= 60 ? 'warn' : '';
+  setGaugeDeg(ramCircle, Math.round((ramPercent / 100) * 360));
+  setGaugeClass(ramCircle, 'gauge-circle ram-circle', ramSeverity);
+  setGaugeClass(ramBarFill, 'metric-progress-fill', ramSeverity);
 
   const ramStatus = $('ramStatusText');
   if (ramStatus) {
@@ -1655,18 +1968,23 @@ function updateMonitorUI() {
   if (netSpeedEl) netSpeedEl.textContent = netDownlink.toFixed(1) + ' Mbps';
   const netTypeTag = $('netTypeTag');
   if (netTypeTag) netTypeTag.textContent = m.netType;
+
+  // Tính tỷ lệ % mạng dựa trên chuẩn khuyến nghị (>= 15 Mbps là 100%)
+  let netPct = 100;
+  if (netDownlink < 15) {
+    netPct = Math.min(95, Math.max(18, Math.round((netDownlink / 15) * 85)));
+  }
+  const netSeverity = (!navigator.onLine || netDownlink < 1.5) ? 'danger' : (netDownlink < 8 ? 'warn' : '');
+
   const netBarFill = $('netBarFill');
   if (netBarFill) {
-    const netPct = Math.min(100, Math.round((netDownlink / 50) * 100));
     netBarFill.style.width = netPct + '%';
-    netBarFill.className = 'metric-progress-fill' + (netDownlink < 2 ? ' danger' : netDownlink < 10 ? ' warn' : ' success');
+    setGaugeClass(netBarFill, 'metric-progress-fill', netSeverity || 'net');
   }
   const netCircle = $('netGaugeCircle');
   if (netCircle) {
-    const netPct = Math.min(100, Math.round((netDownlink / 50) * 100));
-    const netDeg = Math.round((netPct / 100) * 360);
-    netCircle.style.setProperty('--gauge-deg', netDeg + 'deg');
-    netCircle.className = 'gauge-circle net-circle' + (netDownlink < 2 ? ' danger' : netDownlink < 10 ? ' warn' : '');
+    setGaugeDeg(netCircle, Math.round((netPct / 100) * 360));
+    setGaugeClass(netCircle, 'gauge-circle net-circle', netSeverity);
   }
   const netRttEl = $('netRttVal');
   if (netRttEl) netRttEl.textContent = m.netRtt + ' ms';
@@ -1687,21 +2005,22 @@ function updateMonitorUI() {
   // 5. Cập nhật Ổ cứng (SSD / Storage I/O)
   const diskUsedMb = m.diskUsedMb;
   const diskQuotaMb = m.diskQuotaMb || 2048;
-  const diskPct = m.diskUsagePercent;
   const diskValEl = $('diskPercentVal');
   if (diskValEl) diskValEl.textContent = (m.ioReadSpeedMb || 350) + ' MB/s';
   const diskTag = $('diskTypeTag');
   if (diskTag) diskTag.textContent = m.diskType;
+
+  // Tốc độ đọc file I/O: 350-540 MB/s
+  const diskReadPct = Math.min(100, Math.max(25, Math.round(((m.ioReadSpeedMb || 350) / 600) * 100)));
   const diskBarFill = $('diskBarFill');
   if (diskBarFill) {
-    diskBarFill.style.width = Math.min(100, Math.max(12, diskPct)) + '%';
-    diskBarFill.className = 'metric-progress-fill success';
+    diskBarFill.style.width = diskReadPct + '%';
+    setGaugeClass(diskBarFill, 'metric-progress-fill', 'disk');
   }
   const diskCircle = $('diskGaugeCircle');
   if (diskCircle) {
-    const diskDeg = Math.round((Math.max(15, diskPct) / 100) * 360);
-    diskCircle.style.setProperty('--gauge-deg', diskDeg + 'deg');
-    diskCircle.className = 'gauge-circle disk-circle';
+    setGaugeDeg(diskCircle, Math.round((diskReadPct / 100) * 360));
+    setGaugeClass(diskCircle, 'gauge-circle disk-circle', '');
   }
   const diskQuotaEl = $('diskQuotaVal');
   if (diskQuotaEl) diskQuotaEl.textContent = `${diskUsedMb} MB / ${diskQuotaMb >= 1024 ? (diskQuotaMb / 1024).toFixed(1) + ' GB' : diskQuotaMb + ' MB'}`;
@@ -1724,12 +2043,33 @@ function updateMonitorUI() {
   if (sysDot) {
     sysDot.className = 'sys-dot' + (hasAnyConflict ? ' err' : isHighLoad ? ' warn' : '');
   }
-  const sidebarSysSummary = $('sidebarSysSummary');
-  if (sidebarSysSummary) {
-    sidebarSysSummary.textContent = hasAnyConflict ? 'Phát hiện xung đột' : (isHighLoad ? 'Đang tải cao' : 'Hoạt động tối ưu');
-  }
 
-  // 5. Cập nhật Bảng Kiểm tra Xung đột trong trang Monitor
+  // 7. Đồng bộ khối mini chỉ số phần cứng trên khối thống kê (Video & Camera)
+  const cpuClass = cpuPercent >= 80 ? 'danger' : cpuPercent >= 50 ? 'warn' : '';
+  const ramClass = ramPercent >= 80 ? 'danger' : ramPercent >= 60 ? 'warn' : '';
+  const gpuClass = gpuPercent >= 80 ? 'danger' : gpuPercent >= 55 ? 'warn' : 'gpu';
+
+  // Video Mini Stats Strip
+  const vidCpuVal = $('vidMiniCpuVal'); if (vidCpuVal) vidCpuVal.textContent = cpuPercent + '%';
+  const vidCpuBar = $('vidMiniCpuBar'); if (vidCpuBar) { vidCpuBar.style.width = cpuPercent + '%'; vidCpuBar.className = 'mini-bar-fill ' + cpuClass; }
+  const vidRamVal = $('vidMiniRamVal'); if (vidRamVal) vidRamVal.textContent = m.usedHeapMb + ' MB';
+  const vidRamBar = $('vidMiniRamBar'); if (vidRamBar) { vidRamBar.style.width = ramPercent + '%'; vidRamBar.className = 'mini-bar-fill ' + ramClass; }
+  const vidGpuVal = $('vidMiniGpuVal'); if (vidGpuVal) vidGpuVal.textContent = gpuPercent + '%';
+  const vidGpuBar = $('vidMiniGpuBar'); if (vidGpuBar) { vidGpuBar.style.width = gpuPercent + '%'; vidGpuBar.className = 'mini-bar-fill ' + gpuClass; }
+  const vidDiskVal = $('vidMiniDiskVal'); if (vidDiskVal) vidDiskVal.textContent = (m.ioReadSpeedMb || 350) + ' MB/s';
+  const vidDiskBar = $('vidMiniDiskBar'); if (vidDiskBar) { vidDiskBar.style.width = Math.min(100, Math.max(20, Math.round(((m.ioReadSpeedMb || 350) / 600) * 100))) + '%'; vidDiskBar.className = 'mini-bar-fill disk'; }
+
+  // Camera Mini Stats Strip
+  const camCpuVal = $('camMiniCpuVal'); if (camCpuVal) camCpuVal.textContent = cpuPercent + '%';
+  const camCpuBar = $('camMiniCpuBar'); if (camCpuBar) { camCpuBar.style.width = cpuPercent + '%'; camCpuBar.className = 'mini-bar-fill ' + cpuClass; }
+  const camRamVal = $('camMiniRamVal'); if (camRamVal) camRamVal.textContent = m.usedHeapMb + ' MB';
+  const camRamBar = $('camMiniRamBar'); if (camRamBar) { camRamBar.style.width = ramPercent + '%'; camRamBar.className = 'mini-bar-fill ' + ramClass; }
+  const camGpuVal = $('camMiniGpuVal'); if (camGpuVal) camGpuVal.textContent = gpuPercent + '%';
+  const camGpuBar = $('camMiniGpuBar'); if (camGpuBar) { camGpuBar.style.width = gpuPercent + '%'; camGpuBar.className = 'mini-bar-fill ' + gpuClass; }
+  const camFpsVal = $('camMiniFpsVal'); if (camFpsVal) camFpsVal.textContent = m.fps + ' FPS';
+  const camFpsBar = $('camMiniFpsBar'); if (camFpsBar) { camFpsBar.style.width = Math.min(100, Math.round((m.fps / 60) * 100)) + '%'; }
+
+  // 8. Cập nhật Bảng Kiểm tra Xung đột trong trang Monitor
   updateConflictChecklist();
 }
 
