@@ -1,11 +1,22 @@
 @echo off
-title OS Telemetry Agent - Task Manager Monitor
+cd /d "%~dp0"
+title OS Agent - Giam sat he thong
 echo ========================================================
-echo   KHOI DONG OS AGENT - HE DIEU HANH TELEMETRY DAEMON
+echo   OS AGENT - LAY SO LIEU THAT CUA HE DIEU HANH
 echo ========================================================
-echo Dang kiem tra Python va thu vien psutil...
-python -m pip install --quiet psutil
+
+set "PY=python"
+where py >nul 2>nul && set "PY=py -3"
+
+echo Dang kiem tra thu vien trong requirements.txt...
+%PY% -m pip install --disable-pip-version-check -q -r requirements.txt
+if errorlevel 1 (
+  echo.
+  echo [LOI] Khong cai duoc thu vien. Kiem tra lai Python va ket noi mang.
+  pause
+  exit /b 1
+)
+
 echo.
-echo Khoi dong OS Agent lay so lieu that 100% tu Windows...
-python system_agent.py
+%PY% system_agent.py
 pause
