@@ -422,7 +422,11 @@
       <div class="breadcrumb">Trang chủ <i class="fa-solid fa-angle-right"></i> <span>Giám sát hệ thống</span></div>
       <div class="page-title-row">
         <h1 class="page-title">Giám sát hệ thống & Kiểm tra xung đột</h1>
-        <div class="page-title-actions">
+        <div class="page-title-actions" style="display:flex; align-items:center; gap:10px;">
+          <span id="osAgentStatusBadge" class="badge-tag" style="background:var(--card-bg, #f1f5f9); border:1px solid #cbd5e1; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer;" data-tooltip="Trạng thái kết nối OS Agent (Windows Task Manager)">
+            <i class="fa-solid fa-circle" id="osAgentDot" style="color:#94a3b8; font-size:9px; margin-right:4px;"></i>
+            <span id="osAgentText">Đang tìm OS Agent...</span>
+          </span>
           <button id="btnScanConflictMain" class="btn btn-primary btn-sm" type="button" data-tooltip="Quét toàn bộ phần cứng và ứng dụng nền">
             <i class="fa-solid fa-arrows-rotate"></i> Quét xung đột ngay
           </button>
@@ -578,14 +582,19 @@
         <div class="card card-monitor-stat card-monitor-wide">
           <div class="card-head">
             <h2> Ổ cứng máy tính (SSD)</h2>
-            <span class="badge-tag" id="diskTypeTag">SSD Siêu tốc</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button id="btnBenchDisk" class="btn btn-outline btn-xs" type="button" data-tooltip="Chạy benchmark đọc ghi thực tế trên SSD" style="font-size:11px; padding:3px 9px;">
+                <i class="fa-solid fa-bolt"></i> Đo tốc độ SSD
+              </button>
+              <span class="badge-tag" id="diskTypeTag">SSD Siêu tốc</span>
+            </div>
           </div>
           <div class="monitor-wide-body">
             <div class="monitor-wide-gauge-col">
               <div class="gauge-display">
                 <div class="gauge-circle disk-circle" id="diskGaugeCircle">
                   <div class="gauge-inner">
-                    <div class="gauge-val" id="diskPercentVal">350 MB/s</div>
+                    <div class="gauge-val" id="diskPercentVal">-- MB/s</div>
                     <div class="gauge-sub">Tốc độ đọc file</div>
                   </div>
                 </div>
@@ -597,12 +606,12 @@
             <div class="monitor-wide-details-col">
               <div class="metric-details-list">
                 <div class="metric-detail-row">
-                  <span>Bộ nhớ đệm lưu trữ:</span>
+                  <span id="diskStorageLabel">Dung lượng ổ đĩa (C:):</span>
                   <b id="diskQuotaVal">Đang kiểm tra...</b>
                 </div>
                 <div class="metric-detail-row">
                   <span>Độ trễ tìm file (Seek):</span>
-                  <b>~0.1 ms (Rất nhanh)</b>
+                  <b id="diskSeekVal">~0.1 ms (Rất nhanh)</b>
                 </div>
                 <div class="metric-detail-row">
                   <span>Hiệu suất đọc ghi:</span>

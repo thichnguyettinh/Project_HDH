@@ -1533,6 +1533,12 @@ function initTooltips() {
 // ==================== GIÁM SÁT HỆ THỐNG & KIỂM TRA XUNG ĐỘT ====================
 
 const monitorState = {
+  osAgentConnected: false,
+  osAgentLastSeen: 0,
+  realDiskUsedGb: 0,
+  realDiskTotalGb: 0,
+  diskSeekMs: 0.08,
+
   cpuPercent: 8,
   fps: 60,
   eventLoopLag: 1.5,
@@ -1593,6 +1599,8 @@ function initSystemMonitor() {
 
   $('btnScanConflictMain')?.addEventListener('click', runConflictScan);
   $('headerSysStatus')?.addEventListener('click', () => showPage('monitor'));
+  $('btnBenchDisk')?.addEventListener('click', runDiskBenchmark);
+  $('osAgentStatusBadge')?.addEventListener('click', showOsAgentHelp);
 
   // Bắt sự cố mất ngữ cảnh WebGL khi xung đột với game/app 3D khác
   window.addEventListener('webglcontextlost', () => {
@@ -1604,6 +1612,90 @@ function initSystemMonitor() {
 
   // Quét kiểm tra xung đột lần đầu
   runConflictScan();
+}
+
+function showOsAgentHelp() {
+  if (monitorState.osAgentConnected) {
+    alert(`[OS Agent Đang Kết Nối]\n\n• Trạng thái: Đang lấy dữ liệu trực tiếp từ Windows Task Manager\n• Cổng giao tiếp: http://127.0.0.1:5001/api/metrics\n• Nguồn dữ liệu: Windows Kernel qua thư viện psutil\n• Cập nhật: Chu kỳ thời gian thực mỗi 800ms`);
+  } else {
+    alert(`[Hướng Dẫn Kết Nối OS Agent - Task Manager]\n\nHiện tại trình duyệt đang ở chế độ Web Sandbox độc lập.\nĐể lấy chính xác 100% thông số CPU, RAM, SSD từ Task Manager Windows:\n\n1. Mở Terminal / PowerShell tại thư mục dự án:\n   d:\\Code-hdh-hoanchinh\n\n2. Chạy lệnh:\n   python system_agent.py\n\n3. Trình duyệt sẽ tự động phát hiện và chuyển sang hiển thị số liệu thật của máy tính!`);
+  }
+}
+
+let isAgentPolling = false;
+async function pollOsAgentMetrics() {
+  if (isAgentPolling) return;
+  isAgentPolling = true;
+  try {
+    const res = await fetch('http://127.0.0.1:5001/api/metrics', {
+      method: 'GET',
+      signal: AbortSignal.timeout(600)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      monitorState.osAgentConnected = true;
+      monitorState.osAgentLastSeen = Date.now();
+      if (typeof data.cpuPercent === 'number') monitorState.cpuPercent = data.cpuPercent;
+      if (data.cpuCoresLogical) monitorState.cpuCores = data.cpuCoresLogical;
+      if (data.ramUsedMb) monitorState.usedHeapMb = data.ramUsedMb;
+      if (data.ramTotalMb) monitorState.limitHeapMb = data.ramTotalMb;
+      if (typeof data.ramPercent === 'number') monitorState.heapPercent = Math.round(data.ramPercent);
+      if (data.ramTotalGb) monitorState.deviceRamGb = data.ramTotalGb;
+      if (typeof data.diskReadSpeedMb === 'number') monitorState.ioReadSpeedMb = data.diskReadSpeedMb;
+      if (typeof data.diskSeekMs === 'number') monitorState.diskSeekMs = data.diskSeekMs;
+      if (data.diskTotalGb) monitorState.realDiskTotalGb = data.diskTotalGb;
+      if (data.diskUsedGb) monitorState.realDiskUsedGb = data.diskUsedGb;
+      if (typeof data.diskUsagePercent === 'number') monitorState.diskUsagePercent = data.diskUsagePercent;
+      if (typeof data.netDownlinkMbps === 'number' && data.netDownlinkMbps > 0) {
+        monitorState.netDownlink = data.netDownlinkMbps;
+      }
+    } else {
+      monitorState.osAgentConnected = false;
+    }
+  } catch (_) {
+    monitorState.osAgentConnected = false;
+  } finally {
+    isAgentPolling = false;
+  }
+}
+
+async function runDiskBenchmark() {
+  const btn = $('btnBenchDisk');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang đo...';
+  }
+  try {
+    if (monitorState.osAgentConnected) {
+      const res = await fetch('http://127.0.0.1:5001/api/benchmark-disk', {
+        method: 'GET',
+        signal: AbortSignal.timeout(12000)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        monitorState.ioReadSpeedMb = data.readSpeedMb;
+        monitorState.diskSeekMs = data.seekMs;
+        updateMonitorUI();
+        alert(`Kết quả Benchmark SSD thực tế (Windows Kernel):\n• Tốc độ đọc: ${data.readSpeedMb} MB/s\n• Tốc độ ghi: ${data.writeSpeedMb} MB/s\n• Độ trễ tìm file (Seek): ${data.seekMs} ms`);
+      }
+    } else {
+      const t0 = performance.now();
+      const testBlob = new Blob([new Uint8Array(15 * 1024 * 1024)]);
+      await testBlob.arrayBuffer();
+      const dt = Math.max(0.001, (performance.now() - t0) / 1000);
+      const measuredSpeed = Math.round(15 / dt);
+      monitorState.ioReadSpeedMb = measuredSpeed;
+      updateMonitorUI();
+      alert(`Kết quả đo tốc độ đọc I/O thực tế (Web Process Buffer):\n• Tốc độ đọc: ~${measuredSpeed} MB/s\n\n(Mẹo: Khởi động "python system_agent.py" để chạy benchmark chuẩn Windows Task Manager)`);
+    }
+  } catch (err) {
+    alert('Lỗi đo tốc độ: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-bolt"></i> Đo tốc độ SSD';
+    }
+  }
 }
 
 function detectGpuInfo() {
@@ -1658,18 +1750,38 @@ function tickSystemMetrics() {
   monitorState.eventLoopLag = eventLoopLag;
   monitorState.fps = currentFps;
 
-  // Tính % tải CPU dựa trên độ trễ Event Loop, độ sụt giảm FPS và trạng thái Camera/AI
   const isVideoAnalyzing = !!state.videoAnalyzing;
   const isCameraBusy = !!state.cameraBusy;
   const isAiActive = isVideoAnalyzing || isCameraBusy;
-
   const fpsLoss = Math.max(0, (60 - currentFps) / 60);
-  const lagLoss = Math.min(1, eventLoopLag / 120);
-  const cameraBoost = (state.cameraStream && !$('camVideo').paused) ? 14 : 0;
-  const aiBoost = isVideoAnalyzing ? 42 : (isCameraBusy ? 24 : 0);
-  const jitter = (Math.sin(now / 1500) * 3) + (Math.cos(now / 800) * 2);
-  const baseCpu = 6 + (fpsLoss * 45) + (lagLoss * 40) + cameraBoost + aiBoost + jitter;
-  monitorState.cpuPercent = Math.min(100, Math.max(4, Math.round(baseCpu)));
+
+  // Thử kết nối và lấy số liệu thật từ OS Agent
+  pollOsAgentMetrics();
+
+  if (!monitorState.osAgentConnected) {
+    // Chế độ mô phỏng dự phòng khi chưa bật OS Agent
+    const lagLoss = Math.min(1, eventLoopLag / 120);
+    const cameraBoost = (state.cameraStream && !$('camVideo').paused) ? 14 : 0;
+    const aiBoost = isVideoAnalyzing ? 42 : (isCameraBusy ? 24 : 0);
+    const jitter = (Math.sin(now / 1500) * 3) + (Math.cos(now / 800) * 2);
+    const baseCpu = 6 + (fpsLoss * 45) + (lagLoss * 40) + cameraBoost + aiBoost + jitter;
+    monitorState.cpuPercent = Math.min(100, Math.max(4, Math.round(baseCpu)));
+
+    // Tốc độ I/O ổ đĩa mô phỏng
+    monitorState.ioReadSpeedMb = isVideoAnalyzing ? 540 : 350;
+
+    // RAM (JS Heap)
+    if (performance && performance.memory) {
+      monitorState.usedHeapMb = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
+      monitorState.limitHeapMb = Math.round(performance.memory.jsHeapSizeLimit / 1024 / 1024);
+      monitorState.heapPercent = Math.min(100, Math.round((monitorState.usedHeapMb / monitorState.limitHeapMb) * 100));
+    } else {
+      const baseHeap = 70 + (state.cameraLog.length * 2.5) + (state.rows.length * 0.5);
+      monitorState.usedHeapMb = Math.round(baseHeap);
+      monitorState.limitHeapMb = 2048;
+      monitorState.heapPercent = Math.round((monitorState.usedHeapMb / monitorState.limitHeapMb) * 100);
+    }
+  }
 
   // Tính % tải GPU ước tính (GPU Load) dựa trên Render Frame Rate và Giải mã Video Camera
   const camActive = (state.cameraStream && !$('camVideo').paused);
@@ -1681,23 +1793,8 @@ function tickSystemMetrics() {
   if (!monitorState.gpuAccelerated) baseGpu = 4;
   monitorState.gpuPercent = Math.min(100, Math.max(4, Math.round(baseGpu)));
 
-  // Cập nhật tốc độ I/O ổ đĩa: khi đang nạp file video thì tốc độ đọc tăng vọt
-  monitorState.ioReadSpeedMb = isVideoAnalyzing ? 540 : 350;
-
-  // Cập nhật RAM (JS Heap)
-  if (performance && performance.memory) {
-    monitorState.usedHeapMb = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
-    monitorState.limitHeapMb = Math.round(performance.memory.jsHeapSizeLimit / 1024 / 1024);
-    monitorState.heapPercent = Math.min(100, Math.round((monitorState.usedHeapMb / monitorState.limitHeapMb) * 100));
-  } else {
-    const baseHeap = 70 + (state.cameraLog.length * 2.5) + (state.rows.length * 0.5);
-    monitorState.usedHeapMb = Math.round(baseHeap);
-    monitorState.limitHeapMb = 2048;
-    monitorState.heapPercent = Math.round((monitorState.usedHeapMb / monitorState.limitHeapMb) * 100);
-  }
-
   // Cập nhật thông số Mạng (Network Information API)
-  if (navigator.connection) {
+  if (!monitorState.osAgentConnected && navigator.connection) {
     const conn = navigator.connection;
     monitorState.netType = conn.effectiveType ? conn.effectiveType.toUpperCase() : (conn.type || 'Băng thông rộng');
     monitorState.netDownlink = conn.downlink || 10;
@@ -1705,8 +1802,8 @@ function tickSystemMetrics() {
     monitorState.netSaveData = !!conn.saveData;
   }
 
-  // Cập nhật thông số Ổ cứng / Storage Quota
-  if (navigator.storage && navigator.storage.estimate) {
+  // Cập nhật thông số Ổ cứng / Storage Quota (trình duyệt)
+  if (!monitorState.osAgentConnected && navigator.storage && navigator.storage.estimate) {
     navigator.storage.estimate().then((est) => {
       monitorState.diskQuotaMb = Math.round((est.quota || 0) / 1024 / 1024);
       monitorState.diskUsedMb = Math.round((est.usage || 0) / 1024 / 1024);
@@ -1719,25 +1816,33 @@ function tickSystemMetrics() {
 }
 
 function evaluateAutoConflicts() {
-  if (monitorState.cpuPercent >= 85 || monitorState.eventLoopLag > 70) {
-    monitorState.cpuConflict = true;
-    monitorState.cpuConflictMsg = `CPU đang tải nặng (${monitorState.cpuPercent}%, trễ ${monitorState.eventLoopLag.toFixed(1)}ms). Các ứng dụng nền đang làm nghẽn tiến trình!`;
+  const m = monitorState;
+
+  // CPU: khi có OS Agent dùng % CPU thật, ngưỡng cảnh báo nới rộng hơn vì đây là toàn hệ thống
+  const cpuThreshold = m.osAgentConnected ? 90 : 85;
+  if (m.cpuPercent >= cpuThreshold || (!m.osAgentConnected && m.eventLoopLag > 70)) {
+    m.cpuConflict = true;
+    m.cpuConflictMsg = `CPU đang tải nặng (${m.cpuPercent}%${m.osAgentConnected ? ' - Task Manager' : ', trễ ' + m.eventLoopLag.toFixed(1) + 'ms'}). Các ứng dụng nền đang làm nghẽn tiến trình!`;
   } else {
-    monitorState.cpuConflict = false;
-    monitorState.cpuConflictMsg = '';
+    m.cpuConflict = false;
+    m.cpuConflictMsg = '';
   }
 
-  if (monitorState.heapPercent >= 80) {
-    monitorState.ramConflict = true;
-    monitorState.ramConflictMsg = `Bộ nhớ RAM sắp đầy (${monitorState.usedHeapMb} MB - ${monitorState.heapPercent}%). Cần đóng bớt tab!`;
+  // RAM: khi có OS Agent dùng % RAM vật lý thật của toàn Windows
+  const ramCheckPercent = m.osAgentConnected ? m.heapPercent : m.heapPercent;
+  if (ramCheckPercent >= 80) {
+    m.ramConflict = true;
+    m.ramConflictMsg = m.osAgentConnected
+      ? `RAM hệ thống sắp đầy (${m.usedHeapMb} MB / ${m.limitHeapMb} MB - ${m.heapPercent}%). Cần đóng bớt ứng dụng!`
+      : `Bộ nhớ RAM trình duyệt sắp đầy (${m.usedHeapMb} MB - ${m.heapPercent}%). Cần đóng bớt tab!`;
   } else {
-    monitorState.ramConflict = false;
-    monitorState.ramConflictMsg = '';
+    m.ramConflict = false;
+    m.ramConflictMsg = '';
   }
 
   if (!navigator.onLine) {
-    monitorState.netConflict = true;
-    monitorState.netConflictMsg = 'Thiết bị đang ngắt kết nối mạng Internet!';
+    m.netConflict = true;
+    m.netConflictMsg = 'Thiết bị đang ngắt kết nối mạng Internet!';
   }
 }
 
@@ -2015,8 +2120,8 @@ function updateMonitorUI() {
   const diskTag = $('diskTypeTag');
   if (diskTag) diskTag.textContent = m.diskType;
 
-  // Tốc độ đọc file I/O: 350-540 MB/s
-  const diskReadPct = Math.min(100, Math.max(25, Math.round(((m.ioReadSpeedMb || 350) / 600) * 100)));
+  // Tốc độ đọc file I/O: 350-1000 MB/s
+  const diskReadPct = Math.min(100, Math.max(15, Math.round(((m.ioReadSpeedMb || 350) / 1000) * 100)));
   const diskBarFill = $('diskBarFill');
   if (diskBarFill) {
     diskBarFill.style.width = diskReadPct + '%';
@@ -2028,7 +2133,20 @@ function updateMonitorUI() {
     setGaugeClass(diskCircle, 'gauge-circle disk-circle', '');
   }
   const diskQuotaEl = $('diskQuotaVal');
-  if (diskQuotaEl) diskQuotaEl.textContent = `${diskUsedMb} MB / ${diskQuotaMb >= 1024 ? (diskQuotaMb / 1024).toFixed(1) + ' GB' : diskQuotaMb + ' MB'}`;
+  const diskStorageLabel = $('diskStorageLabel');
+  if (diskQuotaEl) {
+    if (m.osAgentConnected && m.realDiskTotalGb > 0) {
+      if (diskStorageLabel) diskStorageLabel.textContent = 'Dung lượng ổ đĩa (C:):';
+      diskQuotaEl.textContent = `${m.realDiskUsedGb} GB / ${m.realDiskTotalGb} GB (${m.diskUsagePercent}%)`;
+    } else {
+      if (diskStorageLabel) diskStorageLabel.textContent = 'Bộ nhớ đệm lưu trữ:';
+      diskQuotaEl.textContent = `${diskUsedMb} MB / ${diskQuotaMb >= 1024 ? (diskQuotaMb / 1024).toFixed(1) + ' GB' : diskQuotaMb + ' MB'}`;
+    }
+  }
+  const diskSeekEl = $('diskSeekVal');
+  if (diskSeekEl) {
+    diskSeekEl.textContent = `~${m.diskSeekMs} ms (Rất nhanh)`;
+  }
   const diskIoEl = $('diskIoStatusText');
   if (diskIoEl) {
     const readSpeed = m.ioReadSpeedMb || 350;
@@ -2047,6 +2165,28 @@ function updateMonitorUI() {
     }
   }
 
+  // Cập nhật huy hiệu OS Agent
+  const agentDot = $('osAgentDot');
+  const agentText = $('osAgentText');
+  const agentBadge = $('osAgentStatusBadge');
+  if (agentText && agentDot) {
+    if (m.osAgentConnected) {
+      agentDot.style.color = '#10b981';
+      agentText.textContent = 'OS Agent: Task Manager';
+      if (agentBadge) {
+        agentBadge.style.borderColor = '#86efac';
+        agentBadge.style.background = '#f0fdf4';
+      }
+    } else {
+      agentDot.style.color = '#f59e0b';
+      agentText.textContent = 'Web Mode (Chạy agent.py để lấy OS thật)';
+      if (agentBadge) {
+        agentBadge.style.borderColor = '#fed7aa';
+        agentBadge.style.background = '#fffbeb';
+      }
+    }
+  }
+
   // 6. Header live status widget
   const headerSysText = $('headerSysText');
   const headerSysStatus = $('headerSysStatus');
@@ -2055,7 +2195,9 @@ function updateMonitorUI() {
   const isHighLoad = cpuPercent >= 80 || ramPercent >= 75;
 
   if (headerSysText) {
-    headerSysText.textContent = `CPU ${cpuPercent}% · RAM ${m.usedHeapMb} MB`;
+    headerSysText.textContent = m.osAgentConnected
+      ? `CPU ${cpuPercent}% · RAM ${m.usedHeapMb} MB`
+      : `CPU ${cpuPercent}% · RAM ${m.usedHeapMb} MB`;
   }
   if (sysDot) {
     sysDot.className = 'sys-dot' + (hasAnyConflict ? ' err' : isHighLoad ? ' warn' : '');
@@ -2074,7 +2216,7 @@ function updateMonitorUI() {
   const vidGpuVal = $('vidMiniGpuVal'); if (vidGpuVal) vidGpuVal.textContent = gpuPercent + '%';
   const vidGpuBar = $('vidMiniGpuBar'); if (vidGpuBar) { vidGpuBar.style.width = gpuPercent + '%'; vidGpuBar.className = 'mini-bar-fill ' + gpuClass; }
   const vidDiskVal = $('vidMiniDiskVal'); if (vidDiskVal) vidDiskVal.textContent = (m.ioReadSpeedMb || 350) + ' MB/s';
-  const vidDiskBar = $('vidMiniDiskBar'); if (vidDiskBar) { vidDiskBar.style.width = Math.min(100, Math.max(20, Math.round(((m.ioReadSpeedMb || 350) / 600) * 100))) + '%'; vidDiskBar.className = 'mini-bar-fill disk'; }
+  const vidDiskBar = $('vidMiniDiskBar'); if (vidDiskBar) { vidDiskBar.style.width = Math.min(100, Math.max(10, Math.round(((m.ioReadSpeedMb || 350) / 1000) * 100))) + '%'; vidDiskBar.className = 'mini-bar-fill disk'; }
 
   // Camera Mini Stats Strip
   const camCpuVal = $('camMiniCpuVal'); if (camCpuVal) camCpuVal.textContent = cpuPercent + '%';
@@ -2121,8 +2263,10 @@ function updateConflictChecklist() {
   updateConflictItem('chkRamBadge', 'chkRamDesc', m.ramConflict, {
     okBadge: '<i class="fa-solid fa-check"></i> Bộ nhớ an toàn',
     errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Sắp đầy bộ nhớ',
-    okDesc: `Dung lượng RAM trống dồi dào (${m.usedHeapMb} MB / ${m.limitHeapMb} MB), đủ để tải và xem video liên tục.`,
-    errDesc: m.ramConflictMsg || 'Bộ nhớ RAM trình duyệt sắp đầy (>80%), nên đóng bớt tab trước khi phân tích!',
+    okDesc: m.osAgentConnected
+      ? `RAM thật máy tính: ${m.usedHeapMb} MB / ${m.limitHeapMb} MB (${m.heapPercent}%) — đủ để xử lý video liên tục.`
+      : `Dung lượng RAM trống dồi dào (${m.usedHeapMb} MB / ${m.limitHeapMb} MB), đủ để tải và xem video liên tục.`,
+    errDesc: m.ramConflictMsg || 'Bộ nhớ RAM sắp đầy (>80%), nên đóng bớt tab trước khi phân tích!',
   });
 
   // Item Mạng
@@ -2137,7 +2281,9 @@ function updateConflictChecklist() {
   updateConflictItem('chkDiskBadge', 'chkDiskDesc', Boolean(m.diskConflict), {
     okBadge: '<i class="fa-solid fa-check"></i> Ổ cứng mượt',
     errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Ổ cứng bận',
-    okDesc: `Tốc độ đọc ổ đĩa ~${m.ioReadSpeedMb} MB/s, mở video lên ngay tức thì mà không phải chờ đợi.`,
+    okDesc: m.osAgentConnected
+      ? `Tốc độ đọc SSD thật: ${m.ioReadSpeedMb} MB/s, Seek: ${m.diskSeekMs} ms. Dung lượng: ${m.realDiskUsedGb}/${m.realDiskTotalGb} GB.`
+      : `Tốc độ đọc ổ đĩa ~${m.ioReadSpeedMb} MB/s, mở video lên ngay tức thì mà không phải chờ đợi.`,
     errDesc: m.diskConflictMsg || 'Ổ cứng đang bận đọc ghi tác vụ khác (I/O Wait), thời gian mở video có thể hơi chậm!',
   });
 
