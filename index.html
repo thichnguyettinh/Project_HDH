@@ -51,6 +51,9 @@
         <span>Cài đặt</span>
       </a>
     </nav>
+    <button id="btnOpenConsent" class="sidebar-terms-btn" type="button">
+        Điều khoản & Quyền riêng tư
+      </button>
     <div class="sidebar-foot">
       <div class="foot-title"><i class="fa-solid fa-graduation-cap"></i> Nhóm 01 - Hệ điều hành</div>
       <div class="foot-sub">ĐH Sư phạm TP.HCM (HCMUE)</div>
@@ -877,6 +880,159 @@
         <img id="modalImg" src="" alt="Ảnh chụp camera lớn">
       </div>
       <div id="modalImgDesc" class="modal-desc"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Consent Popup: ĐIỀU KHOẢN SỬ DỤNG VÀ CHÍNH SÁCH QUYỀN RIÊNG TƯ -->
+<div id="consentModal" class="consent-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="consentModalTitle">
+  <div class="consent-modal-container">
+    <div class="consent-modal-head">
+      <div class="consent-modal-title" id="consentModalTitle">
+        <span>ĐIỀU KHOẢN SỬ DỤNG VÀ CHÍNH SÁCH QUYỀN RIÊNG TƯ</span>
+      </div>
+      <button id="consentModalClose" class="consent-modal-close" type="button" aria-label="Đóng" title="Đóng">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="consent-modal-body" id="consentModalBody">
+      <!-- Quick navigation chips -->
+      <div class="consent-nav-chips">
+        <a href="#consent-part1" class="consent-chip">Phần 1: Điều khoản sử dụng</a>
+        <a href="#consent-part2" class="consent-chip">Phần 2: Chính sách quyền riêng tư</a>
+      </div>
+
+      <!-- Introduction box -->
+      <div class="consent-intro-box">
+        <div class="consent-badge"><i class="fa-solid fa-graduation-cap"></i> Nhóm 01 · Hệ điều hành · HCMUE</div>
+        <p><strong>Trang web “Phân tích, nhận diện hành vi thông qua video”</strong> là đồ án học phần Hệ điều hành, Khoa Công nghệ Thông tin, Trường Đại học Sư phạm TP. Hồ Chí Minh. Trang web phục vụ mục đích học tập, không phải dịch vụ thương mại. Khi truy cập và sử dụng, bạn đồng ý với các điều khoản dưới đây.</p>
+      </div>
+
+      <!-- PHẦN 1 -->
+      <section class="consent-section" id="consent-part1">
+        <h3 class="consent-sec-title">
+          <span class="sec-num">PHẦN 1</span> ĐIỀU KHOẢN SỬ DỤNG
+        </h3>
+
+        <div class="consent-block">
+          <h4 class="consent-sub-title">1. Điều kiện sử dụng</h4>
+          <ul class="consent-list">
+            <li>Bạn tự cung cấp API key Google Gemini của mình và chịu trách nhiệm bảo quản key.</li>
+            <li>Bạn chủ động cấp quyền camera khi muốn sử dụng tính năng nhận diện thời gian thực (realtime); dung lượng video tải lên tối đa là 15MB.</li>
+            <li>Bạn cam kết có quyền hợp pháp đối với video, hình ảnh sử dụng và đã nhận được sự đồng ý của những cá nhân xuất hiện trong đó.</li>
+          </ul>
+        </div>
+
+        <div class="consent-block consent-block-prohibited">
+          <h4 class="consent-sub-title text-danger">2. Hành vi bị cấm</h4>
+          <ul class="consent-list list-prohibited">
+            <li>Theo dõi, ghi hình người khác khi chưa được sự đồng ý hoặc xâm phạm đời tư của họ.</li>
+            <li>Tải lên nội dung vi phạm pháp luật, hoặc nội dung có hình ảnh trẻ em khi chưa có sự đồng ý của cha mẹ/người giám hộ hợp pháp.</li>
+            <li>Sử dụng kết quả phân tích để kết luận, gán nhãn hay phân biệt đối xử với bất kỳ cá nhân cụ thể nào.</li>
+            <li>Thực hiện các hành vi tấn công, làm quá tải trang web hoặc lạm dụng Gemini API.</li>
+          </ul>
+        </div>
+
+        <div class="consent-block consent-block-warning">
+          <h4 class="consent-sub-title text-warning">3. Giới hạn của kết quả AI và Miễn trừ trách nhiệm</h4>
+          <ul class="consent-list">
+            <li>Kết quả nhận diện do AI tạo ra nên có thể xảy ra sai sót (nhầm đối tượng, bỏ sót hành vi, sai thời điểm hoặc sai bản chất hành vi).</li>
+            <li>Kết quả chỉ mang tính chất tham khảo, tuyệt đối không dùng làm căn cứ xử phạt, tuyển dụng, giám sát an ninh hay đưa ra các quyết định ảnh hưởng đến quyền lợi của người khác.</li>
+            <li>Trang web được cung cấp theo nguyên trạng (“as-is”). Nhóm thực hiện không chịu trách nhiệm đối với các thiệt hại phát sinh từ việc sử dụng kết quả AI, sự cố từ dịch vụ Google Gemini, gián đoạn kết nối mạng hoặc việc người dùng vi phạm điều khoản.</li>
+            <li>Gói miễn phí của Gemini có giới hạn lượt gọi theo phút và theo ngày, do đó quá trình phân tích đôi lúc có thể bị gián đoạn.</li>
+          </ul>
+        </div>
+
+        <div class="consent-block">
+          <h4 class="consent-sub-title">4. Sở hữu trí tuệ và Thay đổi điều khoản</h4>
+          <ul class="consent-list">
+            <li>Mã nguồn, giao diện và tài liệu thuộc quyền sở hữu của nhóm thực hiện và Trường Đại học Sư phạm TP. Hồ Chí Minh; logo thuộc Khoa Công nghệ Thông tin.</li>
+            <li>Dữ liệu video, hình ảnh bạn tải lên vẫn thuộc quyền sở hữu của bạn.</li>
+            <li>Điều khoản này có thể được cập nhật và có hiệu lực ngay khi đăng tải. Việc bạn tiếp tục sử dụng trang web đồng nghĩa với việc chấp nhận các thay đổi đó.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- PHẦN 2 -->
+      <section class="consent-section" id="consent-part2">
+        <h3 class="consent-sec-title">
+          <span class="sec-num">PHẦN 2</span> CHÍNH SÁCH QUYỀN RIÊNG TƯ
+        </h3>
+
+        <div class="consent-block">
+          <h4 class="consent-sub-title">1. Dữ liệu được xử lý</h4>
+          <p class="consent-desc">Trang web hoạt động hoàn toàn phía trình duyệt (client-side), không có máy chủ lưu trữ riêng và không yêu cầu tạo tài khoản. Dữ liệu chỉ được xử lý tạm thời để phục vụ các chức năng bạn yêu cầu:</p>
+          <div class="consent-subgrid">
+            <div class="consent-subitem">
+              <div class="subitem-head">Video và hình ảnh</div>
+              <p>Video tải lên và khung hình chụp từ camera (định dạng JPEG, theo chu kỳ 2, 3 hoặc 5 giây) dùng để nhận diện người và hành vi. Camera chỉ bật khi bạn cho phép, không quay video liên tục và không lưu trữ video trên hệ thống.</p>
+            </div>
+            <div class="consent-subitem">
+              <div class="subitem-head">Dữ liệu phiên làm việc</div>
+              <p>Kết quả phân tích, nhật ký camera (kèm ảnh thu nhỏ) và lịch sử hội thoại chatbot chỉ được lưu tạm trong bộ nhớ phiên hiện tại của trình duyệt.</p>
+            </div>
+            <div class="consent-subitem">
+              <div class="subitem-head">Cấu hình cá nhân</div>
+              <p>API key và tên model được lưu cục bộ trong localStorage của trình duyệt trên thiết bị của bạn.</p>
+            </div>
+            <div class="consent-subitem">
+              <div class="subitem-head">Thông số phần cứng</div>
+              <p>Các chỉ số CPU, GPU, RAM, FPS tại mục Giám sát hệ thống được đo trực tiếp trên thiết bị của bạn và hoàn toàn không gửi ra bên ngoài.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="consent-block">
+          <h4 class="consent-sub-title">2. Chia sẻ dữ liệu với bên thứ ba</h4>
+          <div class="consent-third-party">
+            <div class="tp-item">
+              <strong>Google Gemini API:</strong> Video, khung hình camera, kết quả phân tích, nhật ký và câu hỏi chatbot được gửi trực tiếp từ trình duyệt của bạn tới máy chủ của Google thông qua API key cá nhân. Việc Google xử lý và lưu giữ dữ liệu tuân theo chính sách của Google và nằm ngoài tầm kiểm soát của nhóm thực hiện. Vui lòng không tải lên dữ liệu nhạy cảm hoặc thông tin định danh cá nhân nếu bạn không muốn Google tiếp nhận.
+            </div>
+            <div class="tp-item">
+              <strong>Dịch vụ khác:</strong> Các thư viện giao diện như Font Awesome và Google Fonts được tải qua CDN có thể ghi nhận địa chỉ IP của bạn theo cơ chế hoạt động chung của internet.
+            </div>
+            <div class="tp-item highlight-commitment">
+              <strong>Nhóm xin cam kết</strong> KHÔNG thu thập, mua bán, cho thuê hay chia sẻ dữ liệu của bạn với bất kỳ bên thứ ba nào khác.
+            </div>
+          </div>
+        </div>
+
+        <div class="consent-block">
+          <h4 class="consent-sub-title">3. Lưu trữ và Bảo mật</h4>
+          <ul class="consent-list">
+            <li>Toàn bộ dữ liệu phiên làm việc sẽ tự động bị xóa khi bạn đóng tab hoặc tải lại trang (ngoại trừ các file JSON do bạn chủ động xuất về máy và tự bảo quản).</li>
+            <li><strong>Khuyến cáo:</strong> Hãy nhấn xóa API key trên trang web sau khi sử dụng xong, đặc biệt khi dùng máy tính công cộng hoặc thiết bị dùng chung.</li>
+            <li>Dữ liệu truyền tải tới Google Gemini được mã hóa qua giao thức HTTPS, tuy nhiên không có hệ thống truyền dữ liệu nào trên internet đảm bảo an toàn tuyệt đối 100%.</li>
+          </ul>
+        </div>
+
+        <div class="consent-block">
+          <h4 class="consent-sub-title">4. Quyền của người dùng và Thông tin liên hệ</h4>
+          <p class="consent-desc">Bạn có toàn quyền tắt camera, xóa kết quả phân tích, xóa nhật ký, xóa API key hoặc ngừng sử dụng trang web bất cứ lúc nào mà không phát sinh bất kỳ ràng buộc nào.</p>
+          <div class="consent-law-note">
+            <i class="fa-solid fa-book-bookmark text-primary"></i>
+            <span>Chính sách này được xây dựng dựa trên tinh thần tuân thủ pháp luật Việt Nam về bảo vệ dữ liệu cá nhân (bao gồm Nghị định 13/2023/NĐ-CP).</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Modal Footer with Agreement checkbox and Actions -->
+    <div class="consent-modal-foot">
+      <div class="consent-agreement-check">
+        <label class="consent-check-label">
+          <input type="checkbox" id="consentAgreeCheckbox">
+          <span>Tôi đã đọc, hiểu rõ và đồng ý với <b>Điều khoản sử dụng</b> và <b>Chính sách quyền riêng tư</b>.</span>
+        </label>
+      </div>
+      <div class="consent-foot-actions">
+        <button id="btnConsentDecline" class="btn btn-outline btn-consent-decline" type="button">
+          <i class="fa-solid fa-xmark"></i> Từ chối
+        </button>
+        <button id="btnConsentAccept" class="btn btn-primary btn-consent-accept" type="button">
+          <i class="fa-solid fa-check"></i> Tôi đồng ý và tiếp tục
+        </button>
+      </div>
     </div>
   </div>
 </div>

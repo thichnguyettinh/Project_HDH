@@ -2621,4 +2621,103 @@ document.addEventListener('DOMContentLoaded', () => {
   initImageModal();
   initTooltips();
   initSystemMonitor();
+  initConsentModal();
 });
+
+/* ==========================================================================
+   CONSENT POPUP: ĐIỀU KHOẢN SỬ DỤNG VÀ CHÍNH SÁCH QUYỀN RIÊNG TƯ
+   ========================================================================== */
+const CONSENT_STORAGE_KEY = 'user_terms_consented';
+const CONSENT_DATE_KEY = 'user_terms_consented_at';
+
+function openConsentModal() {
+  const modal = $('consentModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  // Cập nhật trạng thái checkbox dựa trên localStorage
+  const isConsented = localStorage.getItem(CONSENT_STORAGE_KEY) === 'true';
+  const checkbox = $('consentAgreeCheckbox');
+  if (checkbox) checkbox.checked = isConsented;
+
+  // Cuộn lên đầu nội dung modal
+  const body = $('consentModalBody');
+  if (body) body.scrollTop = 0;
+}
+
+function closeConsentModal() {
+  const modal = $('consentModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function initConsentModal() {
+  const modal = $('consentModal');
+  if (!modal) return;
+
+  const btnOpen = $('btnOpenConsent');
+  const btnSettingsOpen = $('btnSettingsOpenConsent');
+  const btnClose = $('consentModalClose');
+  const btnAccept = $('btnConsentAccept');
+  const btnDecline = $('btnConsentDecline');
+  const checkbox = $('consentAgreeCheckbox');
+
+  // Mở modal từ sidebar hoặc Cài đặt
+  btnOpen?.addEventListener('click', () => openConsentModal());
+  btnSettingsOpen?.addEventListener('click', () => openConsentModal());
+
+  // Nút đóng (X)
+  btnClose?.addEventListener('click', () => closeConsentModal());
+
+  // Đóng khi click ngoài hộp thoại
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeConsentModal();
+    }
+  });
+
+  // Đóng bằng phím Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+      closeConsentModal();
+    }
+  });
+
+  // Nút đồng ý
+  btnAccept?.addEventListener('click', () => {
+    localStorage.setItem(CONSENT_STORAGE_KEY, 'true');
+    localStorage.setItem(CONSENT_DATE_KEY, new Date().toISOString());
+    if (checkbox) checkbox.checked = true;
+    closeConsentModal();
+  });
+
+  // Nút từ chối
+  btnDecline?.addEventListener('click', () => {
+    const confirmDecline = confirm(
+      'Lưu ý: Nếu không đồng ý với Điều khoản sử dụng và Chính sách quyền riêng tư, bạn có thể bị hạn chế sử dụng một số tính năng AI và camera realtime.\n\nBạn có chắc chắn muốn đóng hộp thoại?'
+    );
+    if (confirmDecline) {
+      if (checkbox) checkbox.checked = false;
+      closeConsentModal();
+    }
+  });
+
+  // Điều hướng nhanh giữa Phần 1 và Phần 2 bên trong modal
+  modal.querySelectorAll('.consent-chip').forEach((chip) => {
+    chip.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = chip.getAttribute('href')?.replace('#', '');
+      const targetEl = targetId ? $(targetId) : null;
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  // Tự động mở popup nếu người dùng chưa đồng ý lần nào
+  const hasConsented = localStorage.getItem(CONSENT_STORAGE_KEY) === 'true';
+  if (!hasConsented) {
+    setTimeout(() => {
+      openConsentModal();
+    }, 350);
+  }
+}
