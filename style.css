@@ -2152,3 +2152,7 @@ mark { background: #FFE58A; padding: 0 2px; border-radius: 2px; }
   .card-monitor-wide .monitor-wide-gauge-col { flex: none; }
   .monitor-group-label { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
+
+/* -- Info Popup (thay alert()) -- */
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp { from { transform: translateY(16px); opacity: 0 } to { transform: none; opacity: 1 } }

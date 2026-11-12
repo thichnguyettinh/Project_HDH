@@ -1555,11 +1555,12 @@ const monitorState = {
   heapPercent: 0,
   deviceRamGb: navigator.deviceMemory || 8,
 
-  // Card mạng & Băng thông (Network Interface Card - NIC)
+  // Card mạng & Băng thông (Network Information API + đo thực)
   netType: 'Ethernet/Wi-Fi',
-  netDownlink: 10,     // Mbps
-  netRtt: 50,          // ms
+  netDownlink: 0,      // Mbps — 0 = chưa đo
+  netRtt: 0,           // ms  — 0 = chưa đo
   netSaveData: false,
+  netMeasured: false,  // đã đo thực tế chưa
 
   // Bộ nhớ ngoài / Ổ cứng (Storage I/O & SSD/HDD)
   diskType: 'SSD NVMe / SATA',
@@ -1592,6 +1593,83 @@ let lastLagCheck = performance.now();
 let currentFps = 60;
 let eventLoopLag = 1.5;
 
+// ─── Đo tốc độ mạng thực tế ──────────────────────────────────────────────────
+// Server: speed.cloudflare.com — có Timing-Allow-Origin:* + PoP tại HAN/HCM
+// Ping: lấy min của 3 lần đo (loại noise), dùng Performance Resource Timing
+// Download: 3 luồng song song × 350KB ≈ 1MB
+async function measureRealNetwork() {
+  const CF = 'https://speed.cloudflare.com/__down?bytes=';
+
+  let downlink = 0;
+  let rtt = 0;
+
+  // ── Bước 1: Warm-up 1KB (thiết lập TLS/HTTP2 với Cloudflare) ──────────────
+  try {
+    await fetch(CF + '1024&wm=1&r=' + Math.random(), {
+      cache: 'no-store', signal: AbortSignal.timeout(5000),
+    });
+  } catch (_) {}
+
+  // ── Bước 2: Đo Ping — 3 lần, lấy giá trị nhỏ nhất ────────────────────────
+  // Cloudflare có Timing-Allow-Origin:* → responseStart - requestStart = RTT thực
+  const rtts = [];
+  for (let i = 0; i < 3; i++) {
+    try {
+      const url = CF + '1&pm=' + i + '&r=' + Math.random();
+      const t0 = performance.now();
+      await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
+      const elapsed = Math.round(performance.now() - t0);
+
+      // Lấy timing entry mới nhất của Cloudflare (có Timing-Allow-Origin:*)
+      const entries = performance.getEntriesByType('resource');
+      const entry = [...entries].reverse()
+        .find(e => e.name.includes('speed.cloudflare.com'));
+
+      if (entry && entry.responseStart > 0 && entry.requestStart > 0) {
+        // responseStart - requestStart = TTFB trên warm connection ≈ RTT thực
+        const measured = Math.round(entry.responseStart - entry.requestStart);
+        if (measured > 0) rtts.push(measured);
+        else rtts.push(elapsed);
+      } else {
+        rtts.push(elapsed);
+      }
+    } catch (_) {}
+    // Delay nhỏ giữa các lần để tránh queue chung
+    await new Promise(r => setTimeout(r, 80));
+  }
+  if (rtts.length > 0) {
+    rtt = Math.min(...rtts); // Min RTT = latency thực, loại bỏ noise
+    rtt = Math.max(1, rtt);
+  }
+
+  // ── Bước 3: Đo Download — 3 luồng song song × 350KB ≈ 1MB ────────────────
+  // Dùng allSettled: nếu 1–2 request fail, vẫn tính từ số request thành công
+  try {
+    const CHUNK = 358400;
+    const t0 = performance.now();
+    const results = await Promise.allSettled(
+      [1, 2, 3].map(i =>
+        fetch(CF + CHUNK + '&dl=' + i + '&r=' + Math.random(), {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(12000),
+        }).then(r => r.arrayBuffer())
+      )
+    );
+    const elapsed = (performance.now() - t0) / 1000;
+    const buffers = results
+      .filter(r => r.status === 'fulfilled')
+      .map(r => r.value);
+    if (buffers.length > 0) {
+      const totalBytes = buffers.reduce((s, b) => s + b.byteLength, 0);
+      downlink = parseFloat(((totalBytes * 8) / elapsed / 1_000_000).toFixed(2));
+    }
+  } catch (_) {
+    downlink = 0;
+  }
+
+  return { downlink, rtt };
+}
+
 function initSystemMonitor() {
   detectGpuInfo();
   requestAnimationFrame(fpsLoop);
@@ -1616,9 +1694,18 @@ function initSystemMonitor() {
 
 function showOsAgentHelp() {
   if (monitorState.osAgentConnected) {
-    alert(`[OS Agent Đang Kết Nối]\n\n• Trạng thái: Đang lấy dữ liệu trực tiếp từ Windows Task Manager\n• Cổng giao tiếp: http://127.0.0.1:5001/api/metrics\n• Nguồn dữ liệu: Windows Kernel qua thư viện psutil\n• Cập nhật: Chu kỳ thời gian thực mỗi 800ms`);
+    showInfoPopup('OS Agent đang kết nối', [
+      'Trạng thái: <b>Đang lấy dữ liệu từ Windows Task Manager</b>',
+      'Cổng: <code>http://127.0.0.1:5001/api/metrics</code>',
+      'Nguồn: Windows Kernel qua thư viện <code>psutil</code>',
+      'Cập nhật: mỗi <b>800ms</b>',
+    ], 'fa-plug-circle-check');
   } else {
-    alert(`[Hướng Dẫn Kết Nối OS Agent - Task Manager]\n\nHiện tại trình duyệt đang ở chế độ Web Sandbox độc lập.\nĐể lấy chính xác 100% thông số CPU, RAM, SSD từ Task Manager Windows:\n\n1. Mở Terminal / PowerShell tại thư mục dự án:\n   d:\\Code-hdh-hoanchinh\n\n2. Chạy lệnh:\n   python system_agent.py\n\n3. Trình duyệt sẽ tự động phát hiện và chuyển sang hiển thị số liệu thật của máy tính!`);
+    showInfoPopup('Hướng dẫn kết nối OS Agent', [
+      'Mở Terminal tại thư mục dự án: <code>d:\\Code-hdh-hoanchinh</code>',
+      'Chạy lệnh: <code>python system_agent.py</code>',
+      'Trình duyệt sẽ tự động phát hiện và chuyển sang hiển thị số liệu thật!',
+    ], 'fa-plug');
   }
 }
 
@@ -1648,6 +1735,10 @@ async function pollOsAgentMetrics() {
       if (typeof data.diskUsagePercent === 'number') monitorState.diskUsagePercent = data.diskUsagePercent;
       if (typeof data.netDownlinkMbps === 'number' && data.netDownlinkMbps > 0) {
         monitorState.netDownlink = data.netDownlinkMbps;
+        monitorState.netMeasured = true; // OS agent đã đo thực
+      }
+      if (typeof data.netRttMs === 'number' && data.netRttMs > 0) {
+        monitorState.netRtt = data.netRttMs;
       }
     } else {
       monitorState.osAgentConnected = false;
@@ -1657,6 +1748,57 @@ async function pollOsAgentMetrics() {
   } finally {
     isAgentPolling = false;
   }
+}
+
+// ─── Popup thông tin nhỏ gọn (thay thế native alert) ─────────────────────────
+function showInfoPopup(title, lines, icon = 'fa-circle-info') {
+  // Xóa popup cũ nếu còn
+  document.getElementById('_infoPopup')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = '_infoPopup';
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.45);backdrop-filter:blur(2px);animation:fadeIn .15s ease;
+  `;
+
+  const box = document.createElement('div');
+  box.style.cssText = `
+    background:var(--surface,#fff);border-radius:14px;padding:22px 26px 18px;
+    max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.22);
+    font-family:inherit;animation:slideUp .18s ease;
+  `;
+
+  const rows = lines.map(l =>
+    `<div style="display:flex;gap:8px;margin-bottom:6px;font-size:13.5px;line-height:1.5">
+       <span style="color:var(--primary,#b05c1a);margin-top:2px;flex-shrink:0">•</span>
+       <span>${l}</span>
+     </div>`
+  ).join('');
+
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <i class="fa-solid ${icon}" style="color:var(--primary,#b05c1a);font-size:17px"></i>
+      <b style="font-size:14.5px">${title}</b>
+    </div>
+    <div style="margin-bottom:16px">${rows}</div>
+    <div style="text-align:right">
+      <button id="_infoPopupOk" style="
+        background:var(--primary,#b05c1a);color:#fff;border:none;border-radius:8px;
+        padding:7px 22px;font-size:13.5px;cursor:pointer;font-weight:600;
+      ">OK</button>
+    </div>
+  `;
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  document.getElementById('_infoPopupOk').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+  });
 }
 
 async function runDiskBenchmark() {
@@ -1676,7 +1818,11 @@ async function runDiskBenchmark() {
         monitorState.ioReadSpeedMb = data.readSpeedMb;
         monitorState.diskSeekMs = data.seekMs;
         updateMonitorUI();
-        alert(`Kết quả Benchmark SSD thực tế (Windows Kernel):\n• Tốc độ đọc: ${data.readSpeedMb} MB/s\n• Tốc độ ghi: ${data.writeSpeedMb} MB/s\n• Độ trễ tìm file (Seek): ${data.seekMs} ms`);
+        showInfoPopup('Benchmark SSD (Windows Kernel)', [
+          `Tốc độ đọc: <b>${data.readSpeedMb} MB/s</b>`,
+          `Tốc độ ghi: <b>${data.writeSpeedMb} MB/s</b>`,
+          `Độ trễ tìm file (Seek): <b>${data.seekMs} ms</b>`,
+        ], 'fa-hard-drive');
       }
     } else {
       const t0 = performance.now();
@@ -1686,10 +1832,13 @@ async function runDiskBenchmark() {
       const measuredSpeed = Math.round(15 / dt);
       monitorState.ioReadSpeedMb = measuredSpeed;
       updateMonitorUI();
-      alert(`Kết quả đo tốc độ đọc I/O thực tế (Web Process Buffer):\n• Tốc độ đọc: ~${measuredSpeed} MB/s\n\n(Mẹo: Khởi động "python system_agent.py" để chạy benchmark chuẩn Windows Task Manager)`);
+      showInfoPopup('Đo tốc độ I/O (Web Buffer)', [
+        `Tốc độ đọc: <b>~${measuredSpeed} MB/s</b>`,
+        `<span style="color:var(--text-muted,#888);font-size:12.5px">Mẹo: Khởi động <code>python system_agent.py</code> để benchmark chuẩn Windows Kernel</span>`,
+      ], 'fa-hard-drive');
     }
   } catch (err) {
-    alert('Lỗi đo tốc độ: ' + err.message);
+    showInfoPopup('Lỗi đo tốc độ', [`${err.message}`], 'fa-triangle-exclamation');
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -1793,13 +1942,56 @@ function tickSystemMetrics() {
   if (!monitorState.gpuAccelerated) baseGpu = 4;
   monitorState.gpuPercent = Math.min(100, Math.max(4, Math.round(baseGpu)));
 
-  // Cập nhật thông số Mạng (Network Information API)
-  if (!monitorState.osAgentConnected && navigator.connection) {
-    const conn = navigator.connection;
-    monitorState.netType = conn.effectiveType ? conn.effectiveType.toUpperCase() : (conn.type || 'Băng thông rộng');
-    monitorState.netDownlink = conn.downlink || 10;
-    monitorState.netRtt = conn.rtt || 50;
-    monitorState.netSaveData = !!conn.saveData;
+  // Cập nhật thông số Mạng (Network Information API + đo tốc độ thực)
+  if (!monitorState.osAgentConnected) {
+    if (navigator.connection) {
+      const conn = navigator.connection;
+      monitorState.netType = conn.effectiveType ? conn.effectiveType.toUpperCase() : (conn.type || 'Băng thông rộng');
+      monitorState.netSaveData = !!conn.saveData;
+      // conn.rtt chỉ dùng làm giá trị khởi tạo (khi chưa đo thực)
+      // Browser thường trả 50/100/150ms (làm tròn) → không chính xác
+      if (!monitorState.netMeasured && conn.rtt > 0 && monitorState.netRtt === 0) {
+        monitorState.netRtt = conn.rtt;
+      }
+      // conn.downlink chỉ dùng làm fallback khi chưa đo thực và chưa có giá trị
+      if (!monitorState.netMeasured && conn.downlink > 0 && monitorState.netDownlink === 0) {
+        monitorState.netDownlink = conn.downlink;
+      }
+    }
+    // Đo tốc độ thực mỗi 45 giây (không chặn UI)
+    if (!monitorState._netMeasuring && (Date.now() - (monitorState._lastNetMeasure || 0)) > 45000) {
+      monitorState._netMeasuring = true;
+      measureRealNetwork().then(({ downlink, rtt }) => {
+        if (downlink > 0) {
+          // Rolling history: giữ 3 giá trị gần nhất để lấy median
+          if (!monitorState._dlHistory) monitorState._dlHistory = [];
+          monitorState._dlHistory.push(downlink);
+          if (monitorState._dlHistory.length > 3) monitorState._dlHistory.shift();
+
+          // Lấy median của history (loại bỏ outlier đơn lẻ)
+          const sorted = [...monitorState._dlHistory].sort((a, b) => a - b);
+          const median = sorted[Math.floor(sorted.length / 2)];
+
+          // Nếu chỉ có 1 mẫu hoặc giá trị mới lớn hơn → cập nhật trực tiếp
+          // Nếu giá trị mới thấp đột biến (< 30% median) → dùng weighted average
+          const prev = monitorState.netDownlink;
+          if (prev > 0 && downlink < median * 0.3 && monitorState._dlHistory.length >= 2) {
+            monitorState.netDownlink = parseFloat((prev * 0.75 + downlink * 0.25).toFixed(2));
+          } else {
+            monitorState.netDownlink = parseFloat(median.toFixed(2));
+          }
+          monitorState.netMeasured = true;
+        }
+        if (rtt > 0) {
+          monitorState.netRtt = rtt;
+          monitorState.netMeasured = true;
+        }
+        monitorState._lastNetMeasure = Date.now();
+        monitorState._netMeasuring = false;
+      }).catch(() => {
+        monitorState._netMeasuring = false;
+      });
+    }
   }
 
   // Cập nhật thông số Ổ cứng / Storage Quota (trình duyệt)
@@ -2071,17 +2263,24 @@ function updateMonitorUI() {
 
   // 4. Cập nhật Card Mạng & Băng thông (Network Interface Card)
   const netDownlink = m.netDownlink;
+  const isMeasuring = !m.netMeasured && !m.osAgentConnected;
+
   const netSpeedEl = $('netSpeedVal');
-  if (netSpeedEl) netSpeedEl.textContent = netDownlink.toFixed(1) + ' Mbps';
+  if (netSpeedEl) {
+    netSpeedEl.textContent = isMeasuring ? '...' : netDownlink.toFixed(1) + ' Mbps';
+  }
   const netTypeTag = $('netTypeTag');
   if (netTypeTag) netTypeTag.textContent = m.netType;
 
   // Tính tỷ lệ % mạng dựa trên chuẩn khuyến nghị (>= 15 Mbps là 100%)
-  let netPct = 100;
-  if (netDownlink < 15) {
-    netPct = Math.min(95, Math.max(18, Math.round((netDownlink / 15) * 85)));
+  let netPct = isMeasuring ? 0 : 100;
+  if (!isMeasuring && netDownlink < 15) {
+    netPct = Math.min(95, Math.max(5, Math.round((netDownlink / 15) * 85)));
   }
-  const netSeverity = (!navigator.onLine || netDownlink < 1.5) ? 'danger' : (netDownlink < 8 ? 'warn' : '');
+  const netSeverity = (!navigator.onLine) ? 'danger'
+    : isMeasuring ? ''
+    : (netDownlink < 1.5) ? 'danger'
+    : (netDownlink < 8) ? 'warn' : '';
 
   const netBarFill = $('netBarFill');
   if (netBarFill) {
@@ -2094,16 +2293,22 @@ function updateMonitorUI() {
     setGaugeClass(netCircle, 'gauge-circle net-circle', netSeverity);
   }
   const netRttEl = $('netRttVal');
-  if (netRttEl) netRttEl.textContent = m.netRtt + ' ms';
+  if (netRttEl) netRttEl.textContent = m.netRtt > 0 ? m.netRtt + ' ms' : '... ms';
   const netStatusEl = $('netStatusText');
   if (netStatusEl) {
     if (!navigator.onLine) {
       netStatusEl.textContent = 'Mất kết nối';
       netStatusEl.className = 'text-danger';
+    } else if (isMeasuring) {
+      netStatusEl.textContent = 'Đang đo...';
+      netStatusEl.className = 'text-muted';
     } else if (netDownlink < 1.5) {
       netStatusEl.textContent = 'Mạng rất yếu';
       netStatusEl.className = 'text-danger';
-    } else if (netDownlink < 8) {
+    } else if (netDownlink < 5) {
+      netStatusEl.textContent = 'Tốc độ chậm';
+      netStatusEl.className = 'text-danger';
+    } else if (netDownlink < 15) {
       netStatusEl.textContent = 'Tốc độ trung bình';
       netStatusEl.className = 'text-warn';
     } else {
@@ -2270,10 +2475,13 @@ function updateConflictChecklist() {
   });
 
   // Item Mạng
+  const netDesc = m.netMeasured || m.osAgentConnected
+    ? `Tốc độ mạng ${m.netDownlink.toFixed(1)} Mbps (Ping ${m.netRtt > 0 ? m.netRtt + 'ms' : '...' }), kết nối tới máy chủ Google AI rất ổn định.`
+    : `Đang đo tốc độ mạng thực tế... (kết quả sẽ cập nhật sau vài giây)`;
   updateConflictItem('chkNetBadge', 'chkNetDesc', m.netConflict, {
     okBadge: '<i class="fa-solid fa-check"></i> Thông suốt',
     errBadge: '<i class="fa-solid fa-triangle-exclamation"></i> Mạng gián đoạn',
-    okDesc: `Tốc độ mạng ${m.netDownlink.toFixed(1)} Mbps (Ping ${m.netRtt}ms), kết nối tới máy chủ Google AI rất ổn định.`,
+    okDesc: netDesc,
     errDesc: m.netConflictMsg || 'Không thể kết nối API Google: Mạng bị mất kết nối hoặc bị tường lửa/VPN chặn.',
   });
 
