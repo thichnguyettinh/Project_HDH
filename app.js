@@ -393,7 +393,7 @@ async function analyzeVideo() {
   if (!state.videoFile) return;
   $('btnAnalyze').disabled = true;
   state.videoAnalyzing = true;
-  setStatus('videoStatus', 'AI đang xem video và nhận diện hành vi (khoảng 15–45 giây)...', 'loading');
+  setStatus('videoStatus', 'AI đang xem video và nhận diện hành vi...', 'loading');
 
   try {
     const base64 = await fileToBase64(state.videoFile);
